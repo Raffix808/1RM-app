@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 
 const DEFAULT_EXERCISES = [
-  "Bicep Curl Barbell",  "Cable Row", "Incline Bench", "Bench Press",
+  "Bicep Curl Barbell", "Cable Row", "Incline Bench", "Bench Press",
   "Squat", "Deadlift", "Overhead Press", "Lat Pulldown",
   "Incline Bench Press", "Leg Press", "Romanian Deadlift", "Pull Up",
   "Barbell Row", "Dumbbell Press", "Tricep Pushdown"
