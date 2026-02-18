@@ -1,16 +1,14 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 
-// ── Constants ────────────────────────────────────────────
+// ── Constants ─────────────────────────────────────────────
 const DEFAULT_EXERCISES = [
   "Bicep Curl Barbell","Cable Row","Incline Bench","Bench Press",
   "Squat","Deadlift","Overhead Press","Lat Pulldown",
   "Incline Bench Press","Leg Press","Romanian Deadlift","Pull Up",
   "Barbell Row","Dumbbell Press","Tricep Pushdown"
 ];
-const RPE_OPTIONS   = [6,6.5,7,7.5,8,8.5,9,9.5,10];
-const SET_OPTIONS   = [1,2,3,4,5];
-const REP_RANGE     = [1,2,3,4,5,6,7,8,9,10,11,12];
-const TABS          = ["Calculator","History","Exercise","Settings"];
+const REP_RANGE = [1,2,3,4,5,6,7,8,9,10,11,12];
+const TABS = ["Calculator","History","Exercise","Settings"];
 
 const REP_PERCENTAGES = [
   {reps:1,pct:100},{reps:2,pct:96},{reps:3,pct:92},
@@ -18,31 +16,35 @@ const REP_PERCENTAGES = [
   {reps:7,pct:81},{reps:8,pct:79},{reps:9,pct:76},
   {reps:10,pct:74},{reps:11,pct:72},{reps:12,pct:70}
 ];
+const MONTHS = ["January","February","March","April","May","June",
+  "July","August","September","October","November","December"];
+const DAYS = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
 
 // ── Helpers ───────────────────────────────────────────────
 function lsGet(k,fb){try{const v=localStorage.getItem(k);return v!==null?JSON.parse(v):fb;}catch{return fb;}}
 function lsSet(k,v){try{localStorage.setItem(k,JSON.stringify(v));}catch{}}
 
-function fmtDate(d){
-  return new Date(d).toLocaleString("sv-SE",{
-    year:"numeric",month:"2-digit",day:"2-digit",
-    hour:"2-digit",minute:"2-digit"
-  }).replace("T"," ");
+function makeDateKey(d){
+  // d is a Date object
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
 }
 
-function todayKey(){
-  const n=new Date();
-  return `${n.getFullYear()}-${String(n.getMonth()+1).padStart(2,"0")}-${String(n.getDate()).padStart(2,"0")}`;
+function fmtDateKey(dk){
+  // "2026-02-18" -> "2026-02-18 HH:MM" using current time
+  const now = new Date();
+  return `${dk} ${String(now.getHours()).padStart(2,"0")}:${String(now.getMinutes()).padStart(2,"0")}`;
 }
+
+function todayKey(){return makeDateKey(new Date());}
 
 function calc1RM(weight,reps){
   if(reps<=1) return weight;
   return Math.round(weight*(1+reps/30));
 }
 
-// Volume = weight × reps × sets  for ALL sets in a workout session
 function calcVolume(sets){
-  return sets.reduce((acc,s)=>acc+s.weight*s.reps*s.sets,0);
+  // each set entry: {weight, reps, setNum}  — volume = weight × reps × 1 per entry (each entry is one set)
+  return sets.reduce((acc,s)=>acc+s.weight*s.reps,0);
 }
 
 function getRepRecords(workouts){
@@ -52,14 +54,13 @@ function getRepRecords(workouts){
       const r=s.reps;
       if(!REP_RANGE.includes(r)) continue;
       if(!records[r]||s.weight>records[r].weight){
-        records[r]={weight:s.weight,unit:w.unit,date:w.date};
+        records[r]={weight:s.weight,unit:w.unit,date:w.dateKey};
       }
     }
   }
   return records;
 }
 
-// Old Navy body fat formulas (measurements in cm)
 function calcBodyFat(gender,waist,neck,height,hips=0){
   if(gender==="male"){
     if(waist<=neck) return null;
@@ -111,48 +112,163 @@ const TAB_ICONS={
   )
 };
 
-// ── Line Chart Component ──────────────────────────────────
+// ── Line Chart ────────────────────────────────────────────
 function LineChart({data,valueKey,color="#7c6ff7",unitLabel="",formatVal}){
   if(!data||data.length<2) return(
-    <div style={{color:"#555",textAlign:"center",padding:"28px 0",fontSize:14}}>
-      {data&&data.length===1?"Add one more entry to see your chart":"Save at least 2 entries to see the chart"}
+    <div style={{color:"#555",textAlign:"center",padding:"24px 0",fontSize:13}}>
+      Save at least 2 sessions to see the chart
     </div>
   );
-  const W=340,H=150,PX=28,PY=20;
+  const W=320,H=140,PX=24,PY=18;
   const vals=data.map(d=>d[valueKey]);
   const maxV=Math.max(...vals),minV=Math.min(...vals);
   const range=maxV-minV||1;
   const toX=i=>PX+(i/(data.length-1))*(W-PX*2);
   const toY=v=>PY+(1-(v-minV)/range)*(H-PY*2);
-  const points=data.map((d,i)=>({x:toX(i),y:toY(d[valueKey]),d}));
-  const pathD=points.map((p,i)=>`${i===0?"M":"L"}${p.x},${p.y}`).join(" ");
-  const areaD=`${pathD} L${points[points.length-1].x},${H-PY} L${points[0].x},${H-PY} Z`;
-  const gid=`g${color.replace("#","")}`;
+  const pts=data.map((d,i)=>({x:toX(i),y:toY(d[valueKey]),d}));
+  const pathD=pts.map((p,i)=>`${i===0?"M":"L"}${p.x},${p.y}`).join(" ");
+  const areaD=`${pathD} L${pts[pts.length-1].x},${H-PY} L${pts[0].x},${H-PY} Z`;
+  const gid=`gl${color.replace(/[^a-z0-9]/gi,"")}`;
   const fmt=formatVal||(v=>`${v}${unitLabel}`);
   return(
-    <div style={{background:"#161616",borderRadius:12,padding:"16px 8px 14px"}}>
+    <div style={{background:"#161616",borderRadius:12,padding:"14px 6px 12px"}}>
       <svg width="100%" viewBox={`0 0 ${W} ${H}`} style={{overflow:"visible"}}>
         <defs>
           <linearGradient id={gid} x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stopColor={color} stopOpacity="0.4"/>
+            <stop offset="0%" stopColor={color} stopOpacity="0.35"/>
             <stop offset="100%" stopColor={color} stopOpacity="0"/>
           </linearGradient>
         </defs>
         <path d={areaD} fill={`url(#${gid})`}/>
         <path d={pathD} fill="none" stroke={color} strokeWidth="2.5" strokeLinejoin="round" strokeLinecap="round"/>
-        {points.map((p,i)=>(
+        {pts.map((p,i)=>(
           <g key={i}>
-            <circle cx={p.x} cy={p.y} r="5" fill={color} stroke="#0a0a0a" strokeWidth="2"/>
-            {(i===0||i===points.length-1)&&(
-              <text x={p.x} y={p.y-10} textAnchor="middle" fill={color} fontSize="10" fontWeight="700">
+            <circle cx={p.x} cy={p.y} r="4.5" fill={color} stroke="#0a0a0a" strokeWidth="2"/>
+            {(i===0||i===pts.length-1)&&(
+              <text x={p.x} y={p.y-9} textAnchor="middle" fill={color} fontSize="10" fontWeight="700">
                 {fmt(p.d[valueKey])}
               </text>
             )}
           </g>
         ))}
-        <text x={points[0].x} y={H-2} textAnchor="middle" fill="#555" fontSize="9">{data[0].date.slice(0,10)}</text>
-        <text x={points[points.length-1].x} y={H-2} textAnchor="middle" fill="#555" fontSize="9">{data[data.length-1].date.slice(0,10)}</text>
+        <text x={pts[0].x} y={H-1} textAnchor="middle" fill="#555" fontSize="8">{data[0].dateKey}</text>
+        <text x={pts[pts.length-1].x} y={H-1} textAnchor="middle" fill="#555" fontSize="8">{data[data.length-1].dateKey}</text>
       </svg>
+    </div>
+  );
+}
+
+// ── Bar Chart ─────────────────────────────────────────────
+function BarChart({data,valueKey,color="#4ade80",unitLabel="",formatVal}){
+  if(!data||data.length<2) return(
+    <div style={{color:"#555",textAlign:"center",padding:"24px 0",fontSize:13}}>
+      Save at least 2 sessions to see the chart
+    </div>
+  );
+  const W=320,H=140,PX=8,PY=20,GAP=4;
+  const vals=data.map(d=>d[valueKey]);
+  const maxV=Math.max(...vals)||1;
+  const barW=Math.max(4,(W-PX*2-(data.length-1)*GAP)/data.length);
+  const fmt=formatVal||(v=>`${v}${unitLabel}`);
+  return(
+    <div style={{background:"#161616",borderRadius:12,padding:"14px 6px 12px"}}>
+      <svg width="100%" viewBox={`0 0 ${W} ${H}`} style={{overflow:"visible"}}>
+        {data.map((d,i)=>{
+          const bh=((d[valueKey]/maxV)*(H-PY-8));
+          const x=PX+i*(barW+GAP);
+          const y=H-PY-bh;
+          return(
+            <g key={i}>
+              <rect x={x} y={y} width={barW} height={bh}
+                rx="3" fill={color} fillOpacity="0.85"/>
+              {(i===0||i===data.length-1)&&(
+                <text x={x+barW/2} y={y-4} textAnchor="middle" fill={color} fontSize="9" fontWeight="700">
+                  {fmt(d[valueKey])}
+                </text>
+              )}
+              {(i===0||i===data.length-1)&&(
+                <text x={x+barW/2} y={H-2} textAnchor="middle" fill="#555" fontSize="7">
+                  {d.dateKey}
+                </text>
+              )}
+            </g>
+          );
+        })}
+      </svg>
+    </div>
+  );
+}
+
+// ── Calendar Page ─────────────────────────────────────────
+function CalendarPage({workoutDates, selectedDateKey, onSelectDate, onClose}){
+  const today=new Date();
+  const [viewYear,setViewYear]=useState(today.getFullYear());
+  const [viewMonth,setViewMonth]=useState(today.getMonth());
+
+  const firstDay=new Date(viewYear,viewMonth,1).getDay();
+  const daysInMonth=new Date(viewYear,viewMonth+1,0).getDate();
+  const cells=[];
+  for(let i=0;i<firstDay;i++) cells.push(null);
+  for(let d=1;d<=daysInMonth;d++) cells.push(d);
+
+  const prevMonth=()=>{if(viewMonth===0){setViewYear(y=>y-1);setViewMonth(11);}else setViewMonth(m=>m-1);};
+  const nextMonth=()=>{if(viewMonth===11){setViewYear(y=>y+1);setViewMonth(0);}else setViewMonth(m=>m+1);};
+
+  const C={purple:"#7c6ff7",bg:"#0a0a0a",text:"#fff",muted:"#888",dim:"#333"};
+
+  return(
+    <div style={{background:C.bg,minHeight:"100vh",display:"flex",flexDirection:"column",maxWidth:430,margin:"0 auto"}}>
+      {/* Header */}
+      <div style={{padding:"20px 20px 12px",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+        <button onClick={onClose} style={{background:"none",border:"none",color:C.text,fontSize:22,cursor:"pointer",padding:0}}>←</button>
+        <span style={{fontSize:20,fontWeight:700}}>Select Date</span>
+        <button onClick={()=>onSelectDate(todayKey())} style={{background:"none",border:"none",color:C.purple,fontSize:14,cursor:"pointer",fontWeight:600}}>Today</button>
+      </div>
+
+      {/* Month nav */}
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"0 20px 16px"}}>
+        <button onClick={prevMonth} style={{background:"#1c1c1e",border:"none",color:C.text,fontSize:20,borderRadius:8,width:36,height:36,cursor:"pointer"}}>‹</button>
+        <span style={{fontSize:18,fontWeight:600}}>{MONTHS[viewMonth]} {viewYear}</span>
+        <button onClick={nextMonth} style={{background:"#1c1c1e",border:"none",color:C.text,fontSize:20,borderRadius:8,width:36,height:36,cursor:"pointer"}}>›</button>
+      </div>
+
+      {/* Day labels */}
+      <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)",padding:"0 16px",marginBottom:4}}>
+        {DAYS.map(d=><div key={d} style={{textAlign:"center",fontSize:12,color:C.muted,padding:"4px 0"}}>{d}</div>)}
+      </div>
+
+      {/* Calendar grid */}
+      <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)",padding:"0 16px",gap:2}}>
+        {cells.map((day,i)=>{
+          if(!day) return <div key={i}/>;
+          const dk=`${viewYear}-${String(viewMonth+1).padStart(2,"0")}-${String(day).padStart(2,"0")}`;
+          const isToday=dk===todayKey();
+          const isSelected=dk===selectedDateKey;
+          const hasWorkout=workoutDates.has(dk);
+          return(
+            <div key={i} onClick={()=>onSelectDate(dk)}
+              style={{
+                aspectRatio:"1",display:"flex",flexDirection:"column",alignItems:"center",
+                justifyContent:"center",borderRadius:"50%",cursor:"pointer",
+                background:isSelected?C.purple:isToday?"#2a2a2a":"transparent",
+                border:isToday&&!isSelected?"1px solid #444":"1px solid transparent",
+                position:"relative",
+              }}>
+              <span style={{fontSize:15,fontWeight:isToday||isSelected?700:400,color:isSelected?"#fff":C.text}}>{day}</span>
+              {hasWorkout&&!isSelected&&(
+                <div style={{width:5,height:5,borderRadius:"50%",background:C.purple,marginTop:2}}/>
+              )}
+              {hasWorkout&&isSelected&&(
+                <div style={{width:5,height:5,borderRadius:"50%",background:"#fff",marginTop:2}}/>
+              )}
+            </div>
+          );
+        })}
+      </div>
+
+      <div style={{padding:"24px 20px",color:C.muted,fontSize:13,textAlign:"center"}}>
+        Purple dot = workout logged · Tap any day to select it
+      </div>
     </div>
   );
 }
@@ -160,19 +276,21 @@ function LineChart({data,valueKey,color="#7c6ff7",unitLabel="",formatVal}){
 // ── Main App ──────────────────────────────────────────────
 export default function App(){
   const [tab,setTab]=useState("Calculator");
+  const [showCalendar,setShowCalendar]=useState(false);
+
+  // Selected date (resets to today on app open, persists within session)
+  const [selectedDateKey,setSelectedDateKey]=useState(todayKey());
 
   // Calculator inputs
   const [weight,setWeight]=useState("");
   const [reps,setReps]=useState("");
-  const [sets,setSets]=useState(3);
   const [exercise,setExercise]=useState("Bench Press");
   const [showExDrop,setShowExDrop]=useState(false);
-  const [showRPEInfo,setShowRPEInfo]=useState(false);
+  const [showInfo,setShowInfo]=useState(false);
   const [saveToast,setSaveToast]=useState("");
 
-  // Core data — workouts are GROUPED by exercise+date
-  // workout = { id, exercise, date, dateKey, unit, sets:[{weight,reps,sets}], best1RM, volume }
-  const [workouts,setWorkouts]=useState(()=>lsGet("workouts",[]));
+  // Data
+  const [workouts,setWorkouts]=useState(()=>lsGet("workouts2",[]));
   const [unit,setUnit]=useState(()=>lsGet("unit","kg"));
   const [exercises,setExercises]=useState(()=>lsGet("exercises",DEFAULT_EXERCISES));
   const [newExName,setNewExName]=useState("");
@@ -193,10 +311,10 @@ export default function App(){
   const [selEx,setSelEx]=useState(null);
   const [exSearch,setExSearch]=useState("");
   const [exDetailTab,setExDetailTab]=useState("Chart");
-  const [chartMetric,setChartMetric]=useState("1rm"); // "1rm" | "volume"
+  const [chartMetric,setChartMetric]=useState("1rm");
 
   // Persist
-  useEffect(()=>{lsSet("workouts",workouts);},[workouts]);
+  useEffect(()=>{lsSet("workouts2",workouts);},[workouts]);
   useEffect(()=>{lsSet("unit",unit);},[unit]);
   useEffect(()=>{lsSet("exercises",exercises);},[exercises]);
   useEffect(()=>{lsSet("bwHistory",bwHistory);},[bwHistory]);
@@ -210,58 +328,61 @@ export default function App(){
 
   const showToast=(msg)=>{setSaveToast(msg);setTimeout(()=>setSaveToast(""),2200);};
 
-  // Save a set — groups with existing workout for same exercise on same day
+  // Current set number = how many sets already saved for this exercise on selected date + 1
+  const currentSetNum=()=>{
+    const w=workouts.find(w=>w.exercise===exercise&&w.dateKey===selectedDateKey);
+    return w?w.sets.length+1:1;
+  };
+
+  // Save current set — grouped by exercise + date
   const saveSet=()=>{
     if(!weightNum||!repsNum) return;
-    const dk=todayKey();
-    const newSet={weight:weightNum,reps:repsNum,sets};
-    const setOneRM=calc1RM(weightNum,repsNum);
+    const setNum=currentSetNum();
+    const newSet={weight:weightNum,reps:repsNum,setNum,oneRM:calc1RM(weightNum,repsNum)};
 
     setWorkouts(prev=>{
-      const idx=prev.findIndex(w=>w.exercise===exercise&&w.dateKey===dk);
+      const idx=prev.findIndex(w=>w.exercise===exercise&&w.dateKey===selectedDateKey);
       if(idx>=0){
-        // Add to existing today's workout
         const updated=[...prev];
-        const w={...updated[idx]};
-        w.sets=[...w.sets,newSet];
-        w.best1RM=Math.max(...w.sets.map(s=>calc1RM(s.weight,s.reps)));
+        const w={...updated[idx],sets:[...updated[idx].sets,newSet]};
+        w.best1RM=Math.max(...w.sets.map(s=>s.oneRM));
         w.volume=calcVolume(w.sets);
         updated[idx]=w;
         return updated;
       } else {
-        // New workout entry for today
         const w={
-          id:Date.now(),exercise,dateKey:dk,
-          date:fmtDate(Date.now()),unit,
+          id:Date.now(),exercise,dateKey:selectedDateKey,
+          date:fmtDateKey(selectedDateKey),unit,
           sets:[newSet],
-          best1RM:setOneRM,
+          best1RM:newSet.oneRM,
           volume:calcVolume([newSet]),
         };
-        return [w,...prev];
+        // Insert in date order (newest first for history display)
+        return [w,...prev].sort((a,b)=>b.dateKey.localeCompare(a.dateKey));
       }
     });
     setWeight("");setReps("");
-    showToast("✓ Set saved!");
+    showToast(`✓ Set ${setNum} saved!`);
   };
 
   const deleteWorkout=(id,e)=>{if(e)e.stopPropagation();setWorkouts(prev=>prev.filter(w=>w.id!==id));};
-
   const goToExercise=(name)=>{setSelEx(name);setExDetailTab("Chart");setChartMetric("1rm");setTab("Exercise");};
 
-  // Exercise-specific workouts oldest-first for chart
-  const exWorkouts=selEx?[...workouts.filter(w=>w.exercise===selEx)].reverse():[];
+  const exWorkouts=selEx?[...workouts.filter(w=>w.exercise===selEx)].sort((a,b)=>a.dateKey.localeCompare(b.dateKey)):[];
   const repRecords=selEx?getRepRecords(exWorkouts):{};
 
-  // Body fat calc
+  // All dates that have workouts (for calendar)
+  const workoutDates=new Set(workouts.map(w=>w.dateKey));
+
+  // Body fat
   const bfW=parseFloat(bfWaist),bfN=parseFloat(bfNeck),bfH=parseFloat(bfHeight),bfHp=parseFloat(bfHips);
-  const bfResult=(bfW>0&&bfN>0&&bfH>0&&(bfGender==="male"||bfHp>0))
-    ?calcBodyFat(bfGender,bfW,bfN,bfH,bfHp):null;
+  const bfResult=(bfW>0&&bfN>0&&bfH>0&&(bfGender==="male"||bfHp>0))?calcBodyFat(bfGender,bfW,bfN,bfH,bfHp):null;
   const bfRounded=bfResult?Math.round(bfResult*10)/10:null;
   const bfCat=bfRounded?bfCategory(bfGender,bfRounded):null;
 
   const saveBF=()=>{
     if(!bfRounded||bfRounded<=0) return;
-    setBfHistory(prev=>[...prev,{id:Date.now(),bodyfat:bfRounded,date:fmtDate(Date.now())}]);
+    setBfHistory(prev=>[...prev,{id:Date.now(),bodyfat:bfRounded,dateKey:selectedDateKey,date:fmtDateKey(selectedDateKey)}]);
     setBfWaist("");setBfNeck("");setBfHips("");
     showToast("✓ Body fat saved!");
   };
@@ -269,13 +390,12 @@ export default function App(){
   const saveBW=()=>{
     const bw=parseFloat(bwInput);
     if(!bw||bw<=0) return;
-    setBwHistory(prev=>[...prev,{id:Date.now(),bodyweight:bw,date:fmtDate(Date.now())}]);
+    setBwHistory(prev=>[...prev,{id:Date.now(),bodyweight:bw,dateKey:selectedDateKey,date:fmtDateKey(selectedDateKey)}]);
     setBwInput("");
     showToast("✓ Body weight saved!");
   };
 
   const filteredExercises=exercises.filter(e=>e.toLowerCase().includes(exSearch.toLowerCase()));
-
   const addExercise=()=>{
     const name=newExName.trim();
     if(!name||exercises.includes(name)) return;
@@ -283,31 +403,46 @@ export default function App(){
     setNewExName("");
   };
 
+  const isToday=selectedDateKey===todayKey();
+  const displayDate=isToday?"Today":selectedDateKey;
+
   // ── Styles ────────────────────────────────────────────────
-  const C={
-    purple:"#7c6ff7",green:"#4ade80",orange:"#fb923c",
-    bg:"#0a0a0a",card:"#1c1c1e",border:"#222",
-    text:"#ffffff",muted:"#888",dim:"#555",
-  };
-  const inp={background:"#fff",border:"none",borderRadius:10,padding:"14px",color:"#000",fontSize:16,outline:"none",width:"100%",boxSizing:"border-box",WebkitAppearance:"none",fontWeight:600};
+  const C={purple:"#7c6ff7",green:"#4ade80",orange:"#fb923c",
+    bg:"#0a0a0a",card:"#1c1c1e",border:"#222",text:"#ffffff",muted:"#888",dim:"#555"};
+  const inp={background:"#fff",border:"none",borderRadius:10,padding:"14px",color:"#000",
+    fontSize:16,outline:"none",width:"100%",boxSizing:"border-box",WebkitAppearance:"none",fontWeight:600};
   const sel={...inp,appearance:"none",WebkitAppearance:"none",cursor:"pointer"};
   const btnP={background:C.purple,border:"none",borderRadius:12,padding:18,color:"#fff",fontSize:17,fontWeight:600,cursor:"pointer",width:"100%"};
   const btnG={background:C.green,border:"none",borderRadius:12,padding:18,color:"#000",fontSize:17,fontWeight:700,cursor:"pointer",width:"100%"};
   const btnO=(color)=>({background:"transparent",border:`1px solid ${color||C.dim}`,borderRadius:12,padding:18,color:color||C.dim,fontSize:17,fontWeight:500,cursor:"pointer",width:"100%"});
-  const divider={borderBottom:"1px solid #1a1a1a"};
+  const divRow={display:"flex",justifyContent:"space-between",alignItems:"center",padding:"13px 16px",borderBottom:"1px solid #1a1a1a"};
+
+  // Show calendar overlay
+  if(showCalendar){
+    return(
+      <CalendarPage
+        workoutDates={workoutDates}
+        selectedDateKey={selectedDateKey}
+        onSelectDate={(dk)=>{setSelectedDateKey(dk);setShowCalendar(false);}}
+        onClose={()=>setShowCalendar(false)}
+      />
+    );
+  }
 
   // ── Calculator ────────────────────────────────────────────
+  const setNum=currentSetNum();
+
   const renderCalculator=()=>(
     <div>
-      <div style={{textAlign:"center",padding:"24px 20px 20px"}}>
+      <div style={{textAlign:"center",padding:"20px 20px 16px"}}>
         <div style={{color:C.muted,fontSize:15,marginBottom:4}}>Estimated 1RM</div>
         <div style={{display:"flex",alignItems:"flex-end",justifyContent:"center",gap:4}}>
-          <span style={{fontSize:88,fontWeight:800,lineHeight:1,letterSpacing:-4}}>{oneRM}</span>
-          <span style={{fontSize:32,color:C.muted,paddingBottom:12}}>{unit}</span>
+          <span style={{fontSize:82,fontWeight:800,lineHeight:1,letterSpacing:-4}}>{oneRM}</span>
+          <span style={{fontSize:30,color:C.muted,paddingBottom:10}}>{unit}</span>
         </div>
       </div>
 
-      {/* Weight + Reps + Sets */}
+      {/* Weight + Reps */}
       <div style={{display:"flex",gap:8,padding:"0 16px",marginBottom:10}}>
         <div style={{flex:2}}>
           <div style={{color:C.muted,fontSize:12,marginBottom:5}}>Weight</div>
@@ -317,29 +452,19 @@ export default function App(){
             <span style={{position:"absolute",right:12,top:"50%",transform:"translateY(-50%)",color:"#999",fontSize:13,fontWeight:600,pointerEvents:"none"}}>{unit}</span>
           </div>
         </div>
-        <div style={{flex:1.2}}>
+        <div style={{flex:1.3}}>
           <div style={{color:C.muted,fontSize:12,marginBottom:5}}>Reps</div>
           <input style={inp} type="text" inputMode="numeric" pattern="[0-9]*" placeholder="0"
             value={reps} onChange={e=>setReps(e.target.value.replace(/[^0-9]/g,""))}/>
         </div>
-        <div style={{flex:1.2}}>
-          <div style={{color:C.muted,fontSize:12,marginBottom:5}}>Sets</div>
-          <div style={{position:"relative"}}>
-            <select style={sel} value={sets} onChange={e=>setSets(parseInt(e.target.value))}>
-              {SET_OPTIONS.map(s=><option key={s} value={s}>{s}</option>)}
-            </select>
-            <span style={{position:"absolute",right:8,top:"50%",transform:"translateY(-50%)",color:"#999",pointerEvents:"none",fontSize:12}}>▾</span>
-          </div>
-        </div>
       </div>
 
       {/* Exercise selector */}
-      <div style={{padding:"0 16px",marginBottom:12,position:"relative"}}>
+      <div style={{padding:"0 16px",marginBottom:10,position:"relative"}}>
         <div style={{color:C.muted,fontSize:12,marginBottom:5}}>Exercise</div>
         <div onClick={()=>setShowExDrop(v=>!v)}
           style={{...inp,cursor:"pointer",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-          <span>{exercise}</span>
-          <span style={{color:"#999",fontSize:12}}>▾</span>
+          <span>{exercise}</span><span style={{color:"#999",fontSize:12}}>▾</span>
         </div>
         {showExDrop&&(
           <div style={{position:"absolute",top:"calc(100% - 4px)",left:16,right:16,zIndex:200,
@@ -356,29 +481,49 @@ export default function App(){
         )}
       </div>
 
+      {/* Set indicator + Date selector */}
+      <div style={{display:"flex",gap:8,padding:"0 16px",marginBottom:12}}>
+        {/* Set badge */}
+        <div style={{flex:1,background:"#1c1c1e",borderRadius:10,padding:"10px 14px",display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+          <span style={{color:C.muted,fontSize:13}}>Current set</span>
+          <span style={{fontSize:22,fontWeight:800,color:C.purple}}>{setNum}</span>
+        </div>
+
+        {/* Date picker */}
+        <div onClick={()=>setShowCalendar(true)}
+          style={{flex:1.2,background:"#1c1c1e",borderRadius:10,padding:"10px 14px",
+            display:"flex",alignItems:"center",justifyContent:"space-between",cursor:"pointer"}}>
+          <div>
+            <div style={{color:C.muted,fontSize:11}}>Date</div>
+            <div style={{color:isToday?C.green:C.purple,fontWeight:600,fontSize:14}}>{displayDate}</div>
+          </div>
+          <span style={{fontSize:18}}>📅</span>
+        </div>
+      </div>
+
       {/* Volume preview */}
       {weightNum>0&&repsNum>0&&(
-        <div style={{margin:"0 16px 12px",background:"#161616",borderRadius:10,padding:"10px 14px",
+        <div style={{margin:"0 16px 10px",background:"#161616",borderRadius:10,padding:"10px 14px",
           display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-          <span style={{color:C.muted,fontSize:13}}>This set's volume</span>
-          <span style={{fontWeight:700,fontSize:16}}>{weightNum*repsNum*sets} {unit}</span>
+          <span style={{color:C.muted,fontSize:13}}>Set {setNum} volume</span>
+          <span style={{fontWeight:700,fontSize:15}}>{weightNum*repsNum} {unit}</span>
         </div>
       )}
 
       <div style={{padding:"0 16px 8px",display:"flex",flexDirection:"column",gap:10}}>
-        <button style={btnP} onClick={saveSet}>Save Set</button>
+        <button style={btnP} onClick={saveSet}>Save Set {setNum}</button>
         <button style={btnO(C.dim)} onClick={()=>{setWeight("");setReps("");}}>Clear</button>
       </div>
 
       <div style={{padding:"10px 16px 6px"}}>
-        <span style={{color:C.purple,fontSize:15,cursor:"pointer"}} onClick={()=>setShowRPEInfo(true)}>What is 1RM?</span>
+        <span style={{color:C.purple,fontSize:15,cursor:"pointer"}} onClick={()=>setShowInfo(true)}>What is 1RM?</span>
       </div>
 
       <div style={{padding:"6px 16px 10px"}}>
         <div style={{fontSize:16,fontWeight:600}}>Estimated Rep Maxes</div>
       </div>
       {REP_PERCENTAGES.filter(r=>r.reps>1).map(({reps:r,pct})=>(
-        <div key={r} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"12px 16px",...divider}}>
+        <div key={r} style={divRow}>
           <span style={{fontSize:15,color:"#bbb",flex:1}}>{r} Reps</span>
           <span style={{fontSize:15,flex:1,textAlign:"center"}}>{oneRM?`${Math.round(oneRM*pct/100)} ${unit}`:"—"}</span>
           <span style={{fontSize:15,color:C.dim,flex:1,textAlign:"right"}}>{pct}%</span>
@@ -396,7 +541,7 @@ export default function App(){
         </div>
       ):workouts.map(w=>(
         <div key={w.id} onClick={()=>goToExercise(w.exercise)}
-          style={{padding:"14px 16px",...divider,cursor:"pointer"}}
+          style={{padding:"14px 16px",borderBottom:"1px solid #1a1a1a",cursor:"pointer"}}
           onTouchStart={e=>e.currentTarget.style.background="#161616"}
           onTouchEnd={e=>e.currentTarget.style.background="transparent"}>
           <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start"}}>
@@ -405,27 +550,26 @@ export default function App(){
               {w.exercise}
             </span>
             <div style={{display:"flex",alignItems:"center",gap:10}}>
-              <span style={{color:C.dim,fontSize:12}}>{w.date.slice(0,10)}</span>
+              <span style={{color:C.dim,fontSize:12}}>{w.dateKey}</span>
               <span onClick={e=>deleteWorkout(w.id,e)} style={{color:"#e55",fontSize:22,lineHeight:1,cursor:"pointer",padding:"0 4px"}}>×</span>
             </div>
           </div>
-          {/* Best 1RM */}
           <div style={{display:"flex",alignItems:"flex-end",justifyContent:"space-between"}}>
             <div>
-              <div style={{fontSize:11,color:C.muted,marginBottom:2}}>Best estimated 1RM</div>
-              <span style={{fontSize:40,fontWeight:800,letterSpacing:-2}}>{w.best1RM}</span>
-              <span style={{fontSize:16,color:C.muted}}> {w.unit}</span>
+              <div style={{fontSize:11,color:C.muted,marginBottom:1}}>Best est. 1RM</div>
+              <span style={{fontSize:38,fontWeight:800,letterSpacing:-2}}>{w.best1RM}</span>
+              <span style={{fontSize:15,color:C.muted}}> {w.unit}</span>
             </div>
             <span style={{color:C.dim,fontSize:24,paddingBottom:4}}>›</span>
           </div>
           {/* Sets breakdown */}
           <div style={{marginTop:6,background:"#161616",borderRadius:8,padding:"8px 10px"}}>
             {w.sets.map((s,i)=>(
-              <div key={i} style={{display:"flex",gap:12,fontSize:13,color:C.muted,marginBottom:i<w.sets.length-1?4:0}}>
+              <div key={i} style={{display:"flex",gap:8,fontSize:13,color:C.muted,marginBottom:i<w.sets.length-1?4:0,alignItems:"center"}}>
+                <span style={{color:C.dim,fontSize:11,width:40}}>Set {s.setNum}</span>
                 <span style={{color:C.text,fontWeight:600}}>{s.weight}{w.unit}</span>
                 <span>× {s.reps} reps</span>
-                <span>× {s.sets} sets</span>
-                <span style={{marginLeft:"auto",color:C.purple,fontWeight:600}}>{s.weight*s.reps*s.sets}{w.unit}</span>
+                <span style={{marginLeft:"auto",color:C.purple,fontWeight:600,fontSize:12}}>{s.weight*s.reps}{w.unit}</span>
               </div>
             ))}
             <div style={{marginTop:6,paddingTop:6,borderTop:"1px solid #2a2a2a",display:"flex",justifyContent:"space-between"}}>
@@ -448,68 +592,65 @@ export default function App(){
           <div style={{display:"flex",alignItems:"center",gap:12}}>
             <button onClick={()=>setSelEx(null)}
               style={{background:"none",border:"none",color:C.text,fontSize:22,cursor:"pointer",padding:0}}>←</button>
-            <span style={{fontSize:22,fontWeight:700}}>{selEx}</span>
+            <span style={{fontSize:20,fontWeight:700}}>{selEx}</span>
           </div>
           <button onClick={()=>{setWorkouts(prev=>prev.filter(w=>w.exercise!==selEx));setSelEx(null);}}
             style={{background:"none",border:"none",color:"#e55",cursor:"pointer",fontSize:20}}>🗑</button>
         </div>
 
-        {/* Chart / History tabs */}
-        <div style={{display:"flex",padding:"12px 16px 0"}}>
+        <div style={{display:"flex",padding:"10px 16px 0"}}>
           {["Chart","History"].map(t=>(
             <button key={t} onClick={()=>setExDetailTab(t)} style={{
               flex:1,background:"none",border:"none",
               borderBottom:`2px solid ${exDetailTab===t?C.purple:"transparent"}`,
               color:exDetailTab===t?C.purple:C.dim,
-              padding:"10px 0",fontSize:16,cursor:"pointer",fontWeight:exDetailTab===t?600:400,
-            }}>{t}</button>
+              padding:"10px 0",fontSize:16,cursor:"pointer",fontWeight:exDetailTab===t?600:400}}>
+              {t}
+            </button>
           ))}
         </div>
 
         {exDetailTab==="Chart"?(
-          <div style={{paddingTop:16}}>
+          <div style={{paddingTop:14}}>
             {/* Metric toggle */}
             <div style={{display:"flex",gap:8,padding:"0 16px",marginBottom:12}}>
-              {[["1rm","Estimated 1RM"],["volume","Volume"]].map(([key,label])=>(
+              {[["1rm","Estimated 1RM","#7c6ff7"],["volume","Volume","#4ade80"]].map(([key,label,col])=>(
                 <button key={key} onClick={()=>setChartMetric(key)} style={{
-                  flex:1,background:chartMetric===key?C.purple:"#1c1c1e",
-                  border:"none",borderRadius:8,padding:"8px 0",
-                  color:"#fff",fontSize:13,fontWeight:chartMetric===key?700:400,cursor:"pointer"
-                }}>{label}</button>
+                  flex:1,background:chartMetric===key?col+"22":"#1c1c1e",
+                  border:`1.5px solid ${chartMetric===key?col:"transparent"}`,
+                  borderRadius:8,padding:"9px 0",
+                  color:chartMetric===key?col:"#888",
+                  fontSize:13,fontWeight:chartMetric===key?700:400,cursor:"pointer"}}>
+                  {label}
+                </button>
               ))}
             </div>
 
-            {chartMetric==="1rm"?(
-              <>
-                <div style={{padding:"0 16px 8px"}}>
-                  <div style={{fontSize:13,color:C.muted}}>Best estimated 1RM per session</div>
-                </div>
-                <div style={{padding:"0 16px"}}>
+            <div style={{padding:"0 16px 4px"}}>
+              {chartMetric==="1rm"?(
+                <>
+                  <div style={{fontSize:12,color:C.muted,marginBottom:8}}>Best estimated 1RM per session</div>
                   <LineChart data={exWorkouts} valueKey="best1RM" unitLabel={ul} color={C.purple}/>
-                </div>
-              </>
-            ):(
-              <>
-                <div style={{padding:"0 16px 8px"}}>
-                  <div style={{fontSize:13,color:C.muted}}>Total volume per session (weight × reps × sets)</div>
-                </div>
-                <div style={{padding:"0 16px"}}>
-                  <LineChart
+                </>
+              ):(
+                <>
+                  <div style={{fontSize:12,color:C.muted,marginBottom:8}}>Total volume per session (weight × reps, all sets)</div>
+                  <BarChart
                     data={exWorkouts}
                     valueKey="volume"
-                    color={C.orange}
-                    formatVal={v=>v>=1000?`${(v/1000).toFixed(1)}k`:`${v}`}
+                    color={C.green}
+                    formatVal={v=>v>=1000?`${(v/1000).toFixed(1)}k`:String(v)}
                     unitLabel={ul}
                   />
-                </div>
-              </>
-            )}
+                </>
+              )}
+            </div>
 
             {/* Rep Max Records */}
-            <div style={{padding:"22px 16px 4px"}}>
-              <div style={{fontSize:18,fontWeight:700}}>Rep Max Records</div>
-              <div style={{fontSize:13,color:C.muted,marginTop:4,lineHeight:1.5}}>
-                Heaviest weight ever lifted at each rep count. Updates automatically when you beat a record.
+            <div style={{padding:"20px 16px 4px"}}>
+              <div style={{fontSize:17,fontWeight:700}}>Rep Max Records</div>
+              <div style={{fontSize:12,color:C.muted,marginTop:3,lineHeight:1.5}}>
+                Heaviest weight ever lifted at each rep count. Updates when you beat a record.
               </div>
             </div>
 
@@ -519,18 +660,15 @@ export default function App(){
               const latestForRep=latest?.sets.find(s=>s.reps===r);
               const isNewPR=record&&latestForRep&&latestForRep.weight===record.weight&&allForRep.length>=2;
               return(
-                <div key={r} style={{display:"flex",justifyContent:"space-between",alignItems:"center",
-                  padding:"13px 16px",...divider,background:isNewPR?"#1a1535":"transparent"}}>
+                <div key={r} style={{...divRow,background:isNewPR?"#1a1535":"transparent"}}>
                   <span style={{fontSize:15,flex:1,fontWeight:500}}>{r} Rep Max</span>
                   <span style={{fontSize:17,flex:1.5,textAlign:"center",fontWeight:record?800:400}}>
                     {record?`${record.weight} `:<span style={{color:C.dim}}>—</span>}
-                    {record&&<span style={{fontSize:13,color:C.muted,fontWeight:400}}>{record.unit}</span>}
+                    {record&&<span style={{fontSize:12,color:C.muted,fontWeight:400}}>{record.unit}</span>}
                   </span>
                   <span style={{fontSize:12,flex:1,textAlign:"right"}}>
-                    {isNewPR
-                      ?<span style={{color:C.purple,fontWeight:700}}>● NEW PR</span>
-                      :record?<span style={{color:C.dim}}>{record.date.slice(0,10)}</span>
-                      :null}
+                    {isNewPR?<span style={{color:C.purple,fontWeight:700}}>● NEW PR</span>
+                      :record?<span style={{color:C.dim}}>{record.date}</span>:null}
                   </span>
                 </div>
               );
@@ -541,14 +679,18 @@ export default function App(){
             {exWorkouts.length===0?(
               <div style={{textAlign:"center",color:C.dim,padding:40}}>No entries yet</div>
             ):[...exWorkouts].reverse().map(w=>(
-              <div key={w.id} style={{padding:"14px 16px",...divider}}>
-                <div style={{color:C.dim,fontSize:12,marginBottom:4}}>{w.date}</div>
-                <div style={{fontSize:13,color:C.muted,marginBottom:6}}>Best 1RM: <span style={{color:C.text,fontWeight:700,fontSize:15}}>{w.best1RM} {w.unit}</span></div>
+              <div key={w.id} style={{padding:"14px 16px",borderBottom:"1px solid #1a1a1a"}}>
+                <div style={{color:C.dim,fontSize:12,marginBottom:6}}>{w.dateKey}</div>
+                <div style={{fontSize:13,color:C.muted,marginBottom:8}}>
+                  Best 1RM: <span style={{color:C.text,fontWeight:700,fontSize:15}}>{w.best1RM} {w.unit}</span>
+                  <span style={{marginLeft:16}}>Volume: <span style={{color:C.green,fontWeight:700}}>{w.volume} {w.unit}</span></span>
+                </div>
                 {w.sets.map((s,i)=>(
-                  <div key={i} style={{display:"flex",gap:12,fontSize:13,color:C.muted,marginBottom:3}}>
+                  <div key={i} style={{display:"flex",gap:8,fontSize:13,color:C.muted,marginBottom:3,alignItems:"center"}}>
+                    <span style={{color:C.dim,fontSize:11,width:40}}>Set {s.setNum}</span>
                     <span style={{color:C.text,fontWeight:600}}>{s.weight}{w.unit}</span>
-                    <span>× {s.reps} reps × {s.sets} sets</span>
-                    <span style={{marginLeft:"auto",color:C.orange,fontWeight:600}}>{s.weight*s.reps*s.sets}{w.unit}</span>
+                    <span>× {s.reps} reps</span>
+                    <span style={{marginLeft:"auto",color:C.purple,fontSize:12,fontWeight:600}}>{s.weight*s.reps}{w.unit}</span>
                   </div>
                 ))}
                 <div style={{marginTop:6,paddingTop:6,borderTop:"1px solid #2a2a2a",display:"flex",justifyContent:"space-between"}}>
@@ -578,7 +720,7 @@ export default function App(){
           return(
             <div key={ex} onClick={()=>{setSelEx(ex);setExDetailTab("Chart");setChartMetric("1rm");}}
               style={{display:"flex",justifyContent:"space-between",alignItems:"center",
-                padding:"16px",...divider,cursor:"pointer"}}>
+                padding:"16px",borderBottom:"1px solid #1a1a1a",cursor:"pointer"}}>
               <div>
                 <span style={{fontSize:16}}>{ex}</span>
                 {hasHistory&&<span style={{marginLeft:8,fontSize:11,color:C.purple}}>● tracked</span>}
@@ -600,8 +742,6 @@ export default function App(){
   // ── Settings ──────────────────────────────────────────────
   const renderSettings=()=>(
     <div style={{padding:16}}>
-
-      {/* Units */}
       <div style={{fontSize:13,color:C.dim,textTransform:"uppercase",letterSpacing:1,marginBottom:10}}>Units</div>
       <div style={{display:"flex",gap:10,marginBottom:28}}>
         {["kg","lbs"].map(u=>(
@@ -612,7 +752,7 @@ export default function App(){
         ))}
       </div>
 
-      {/* ── Body Weight ─────────────────── */}
+      {/* Body Weight */}
       <div style={{fontSize:13,color:C.dim,textTransform:"uppercase",letterSpacing:1,marginBottom:10}}>Body Weight</div>
       <div style={{background:"#161616",borderRadius:14,padding:16,marginBottom:24}}>
         <div style={{display:"flex",gap:10,marginBottom:14,alignItems:"flex-end"}}>
@@ -626,39 +766,37 @@ export default function App(){
           </div>
           <button onClick={saveBW} style={{...btnG,width:"auto",padding:"14px 18px",flexShrink:0}}>Save</button>
         </div>
-
         {bwHistory.length>0&&(
           <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",
             marginBottom:14,background:"#1e1e1e",borderRadius:10,padding:"10px 14px"}}>
             <div>
               <div style={{fontSize:11,color:C.muted}}>Latest</div>
-              <div style={{fontSize:28,fontWeight:800,letterSpacing:-1}}>
+              <div style={{fontSize:26,fontWeight:800,letterSpacing:-1}}>
                 {bwHistory[bwHistory.length-1].bodyweight}
-                <span style={{fontSize:14,color:C.muted,fontWeight:400}}> kg</span>
+                <span style={{fontSize:13,color:C.muted,fontWeight:400}}> kg</span>
               </div>
             </div>
             {bwHistory.length>1&&(()=>{
               const diff=(bwHistory[bwHistory.length-1].bodyweight-bwHistory[bwHistory.length-2].bodyweight).toFixed(1);
               const col=parseFloat(diff)<0?C.green:parseFloat(diff)>0?"#f87171":C.muted;
-              return<div style={{textAlign:"right"}}>
-                <div style={{fontSize:11,color:C.muted}}>{bwHistory[bwHistory.length-1].date.slice(0,10)}</div>
-                <div style={{fontSize:14,color:col,fontWeight:700}}>{parseFloat(diff)>0?"+":""}{diff} kg</div>
-              </div>;
+              return(
+                <div style={{textAlign:"right"}}>
+                  <div style={{fontSize:11,color:C.muted}}>{bwHistory[bwHistory.length-1].dateKey}</div>
+                  <div style={{fontSize:14,color:col,fontWeight:700}}>{parseFloat(diff)>0?"+":""}{diff} kg</div>
+                </div>
+              );
             })()}
           </div>
         )}
-
         <LineChart data={bwHistory} valueKey="bodyweight" unitLabel="kg" color={C.green}/>
-
         {bwHistory.length>0&&(
           <div style={{marginTop:12}}>
-            <div style={{fontSize:12,color:C.muted,marginBottom:6}}>Recent entries</div>
             {[...bwHistory].reverse().slice(0,5).map(e=>(
               <div key={e.id} style={{display:"flex",justifyContent:"space-between",alignItems:"center",
                 padding:"8px 0",borderBottom:"1px solid #2a2a2a"}}>
                 <span style={{fontSize:15,fontWeight:600}}>{e.bodyweight} kg</span>
                 <div style={{display:"flex",alignItems:"center",gap:12}}>
-                  <span style={{fontSize:12,color:C.dim}}>{e.date.slice(0,10)}</span>
+                  <span style={{fontSize:12,color:C.dim}}>{e.dateKey}</span>
                   <span onClick={()=>setBwHistory(prev=>prev.filter(x=>x.id!==e.id))}
                     style={{color:"#e55",fontSize:18,cursor:"pointer"}}>×</span>
                 </div>
@@ -668,27 +806,22 @@ export default function App(){
         )}
       </div>
 
-      {/* ── Body Fat Calculator ──────────── */}
+      {/* Body Fat */}
       <div style={{fontSize:13,color:C.dim,textTransform:"uppercase",letterSpacing:1,marginBottom:10}}>Body Fat (US Navy Method)</div>
       <div style={{background:"#161616",borderRadius:14,padding:16,marginBottom:24}}>
         <div style={{fontSize:13,color:C.muted,marginBottom:14,lineHeight:1.5}}>
-          Enter measurements in <b style={{color:C.text}}>centimetres</b>. All measurements taken at the narrowest/widest point.
+          All measurements in <b style={{color:C.text}}>centimetres</b>.
         </div>
-
-        {/* Gender toggle */}
-        <div style={{display:"flex",gap:8,marginBottom:14}}>
+        <div style={{display:"flex",gap:8,marginBottom:12}}>
           {["male","female"].map(g=>(
             <button key={g} onClick={()=>setBfGender(g)} style={{
               flex:1,background:bfGender===g?C.purple:"#2a2a2a",border:"none",
               borderRadius:8,padding:"10px 0",color:"#fff",
-              fontSize:14,fontWeight:bfGender===g?700:400,cursor:"pointer",
-              textTransform:"capitalize"}}>
+              fontSize:14,fontWeight:bfGender===g?700:400,cursor:"pointer",textTransform:"capitalize"}}>
               {g}
             </button>
           ))}
         </div>
-
-        {/* Measurement inputs */}
         <div style={{display:"flex",gap:8,marginBottom:10}}>
           <div style={{flex:1}}>
             <div style={{color:C.muted,fontSize:12,marginBottom:5}}>Height (cm)</div>
@@ -701,7 +834,6 @@ export default function App(){
               value={bfNeck} onChange={e=>setBfNeck(e.target.value)}/>
           </div>
         </div>
-
         <div style={{display:"flex",gap:8,marginBottom:14}}>
           <div style={{flex:1}}>
             <div style={{color:C.muted,fontSize:12,marginBottom:5}}>Waist (cm)</div>
@@ -716,13 +848,11 @@ export default function App(){
             </div>
           )}
         </div>
-
-        {/* Live result */}
         {bfRounded&&bfRounded>0?(
           <div style={{background:"#1e1e1e",borderRadius:12,padding:"16px",marginBottom:14,textAlign:"center"}}>
             <div style={{fontSize:13,color:C.muted,marginBottom:4}}>Estimated Body Fat</div>
-            <div style={{fontSize:52,fontWeight:800,letterSpacing:-2,color:bfCat?.color||C.text}}>
-              {bfRounded}<span style={{fontSize:24,fontWeight:400,color:C.muted}}>%</span>
+            <div style={{fontSize:50,fontWeight:800,letterSpacing:-2,color:bfCat?.color||C.text}}>
+              {bfRounded}<span style={{fontSize:22,fontWeight:400,color:C.muted}}>%</span>
             </div>
             <div style={{display:"inline-block",background:bfCat?.color+"22",
               border:`1px solid ${bfCat?.color}`,borderRadius:20,
@@ -731,19 +861,16 @@ export default function App(){
             </div>
           </div>
         ):(
-          <div style={{background:"#1e1e1e",borderRadius:12,padding:"14px",marginBottom:14,textAlign:"center",color:C.dim,fontSize:14}}>
+          <div style={{background:"#1e1e1e",borderRadius:12,padding:14,marginBottom:14,textAlign:"center",color:C.dim,fontSize:14}}>
             Fill in all measurements to see your result
           </div>
         )}
-
         <button onClick={saveBF} style={{...btnP,opacity:bfRounded&&bfRounded>0?1:0.4}}>
           Save Body Fat Reading
         </button>
-
-        {/* BF chart */}
         {bfHistory.length>0&&(
           <div style={{marginTop:16}}>
-            <div style={{fontSize:13,color:C.muted,marginBottom:8}}>Body fat over time</div>
+            <div style={{fontSize:12,color:C.muted,marginBottom:8}}>Body fat over time</div>
             <LineChart data={bfHistory} valueKey="bodyfat" unitLabel="%" color={C.orange}/>
             <div style={{marginTop:10}}>
               {[...bfHistory].reverse().slice(0,5).map(e=>(
@@ -751,7 +878,7 @@ export default function App(){
                   padding:"8px 0",borderBottom:"1px solid #2a2a2a"}}>
                   <span style={{fontSize:15,fontWeight:600}}>{e.bodyfat}%</span>
                   <div style={{display:"flex",alignItems:"center",gap:12}}>
-                    <span style={{fontSize:12,color:C.dim}}>{e.date.slice(0,10)}</span>
+                    <span style={{fontSize:12,color:C.dim}}>{e.dateKey}</span>
                     <span onClick={()=>setBfHistory(prev=>prev.filter(x=>x.id!==e.id))}
                       style={{color:"#e55",fontSize:18,cursor:"pointer"}}>×</span>
                   </div>
@@ -762,7 +889,7 @@ export default function App(){
         )}
       </div>
 
-      {/* Data management */}
+      {/* Data */}
       <div style={{fontSize:13,color:C.dim,textTransform:"uppercase",letterSpacing:1,marginBottom:10}}>Data</div>
       <button onClick={()=>{if(window.confirm("Clear all workout history?"))setWorkouts([]);}}
         style={{...btnO("#e55"),marginBottom:10}}>Clear All Workout History</button>
@@ -778,7 +905,8 @@ export default function App(){
 
   // ── Root ──────────────────────────────────────────────────
   return(
-    <div style={{background:C.bg,color:C.text,fontFamily:"-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif",minHeight:"100vh",display:"flex",flexDirection:"column",maxWidth:430,margin:"0 auto"}}>
+    <div style={{background:C.bg,color:C.text,fontFamily:"-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif",
+      minHeight:"100vh",display:"flex",flexDirection:"column",maxWidth:430,margin:"0 auto"}}>
 
       {!(tab==="Exercise"&&selEx)&&(
         <div style={{padding:"20px 20px 12px",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
@@ -800,9 +928,11 @@ export default function App(){
       </div>
 
       {/* Tab bar */}
-      <div style={{position:"fixed",bottom:0,left:"50%",transform:"translateX(-50%)",width:"100%",maxWidth:430,background:"#111",borderTop:`1px solid ${C.border}`,display:"flex",padding:"8px 0 20px"}}>
+      <div style={{position:"fixed",bottom:0,left:"50%",transform:"translateX(-50%)",width:"100%",maxWidth:430,
+        background:"#111",borderTop:`1px solid ${C.border}`,display:"flex",padding:"8px 0 20px"}}>
         {TABS.map(t=>(
-          <div key={t} style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",gap:3,cursor:"pointer",color:tab===t?C.purple:C.dim,fontSize:10,fontWeight:tab===t?600:400}}
+          <div key={t} style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",gap:3,
+            cursor:"pointer",color:tab===t?C.purple:C.dim,fontSize:10,fontWeight:tab===t?600:400}}
             onClick={()=>{setTab(t);setSelEx(null);}}>
             {TAB_ICONS[t]}<span>{t}</span>
           </div>
@@ -811,27 +941,30 @@ export default function App(){
 
       {/* Toast */}
       {saveToast&&(
-        <div style={{position:"fixed",bottom:95,left:"50%",transform:"translateX(-50%)",background:"#1c1c1e",color:C.text,padding:"12px 24px",borderRadius:20,fontSize:14,fontWeight:500,border:"1px solid #333",zIndex:999,whiteSpace:"nowrap"}}>
+        <div style={{position:"fixed",bottom:95,left:"50%",transform:"translateX(-50%)",
+          background:"#1c1c1e",color:C.text,padding:"12px 24px",borderRadius:20,
+          fontSize:14,fontWeight:500,border:"1px solid #333",zIndex:999,whiteSpace:"nowrap"}}>
           {saveToast}
         </div>
       )}
 
       {/* 1RM info modal */}
-      {showRPEInfo&&(
-        <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.85)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:1000,padding:20}}
-          onClick={()=>setShowRPEInfo(false)}>
+      {showInfo&&(
+        <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.85)",display:"flex",
+          alignItems:"center",justifyContent:"center",zIndex:1000,padding:20}}
+          onClick={()=>setShowInfo(false)}>
           <div style={{background:"#1a1a1a",borderRadius:16,padding:24,maxWidth:340,width:"100%",border:"1px solid #333"}}
             onClick={e=>e.stopPropagation()}>
             <div style={{fontSize:20,fontWeight:700,marginBottom:12}}>What is 1RM?</div>
             <div style={{color:"#aaa",fontSize:14,lineHeight:1.7}}>
               Your <b style={{color:C.text}}>1 Rep Max (1RM)</b> is the maximum weight you can lift for a single rep.<br/><br/>
-              This app uses the <b style={{color:C.text}}>Epley formula</b> to estimate it from your working sets:<br/><br/>
+              This app uses the <b style={{color:C.text}}>Epley formula</b>:<br/><br/>
               <span style={{fontFamily:"monospace",background:"#2a2a2a",padding:"4px 8px",borderRadius:6,color:C.purple}}>
-                1RM = weight × (1 + reps/30)
+                1RM = weight × (1 + reps ÷ 30)
               </span><br/><br/>
-              The more sets and reps you log, the better picture you get of your true strength.
+              Log multiple sets per session and the app tracks your best 1RM and total volume automatically.
             </div>
-            <button style={{...btnP,marginTop:16}} onClick={()=>setShowRPEInfo(false)}>Got it</button>
+            <button style={{...btnP,marginTop:16}} onClick={()=>setShowInfo(false)}>Got it</button>
           </div>
         </div>
       )}
