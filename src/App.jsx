@@ -209,7 +209,7 @@ function HexBadge({topLine, bottomLine, iconKey, size=100, locked=false}){
   // Icon occupies upper portion: centred at ~42% height, scaled to fit
   const iconSize = size * 0.4;
   const iconX = cx - iconSize/2;
-  const iconY = cy*0.18;
+  const iconY = cy*0.3;
 
   return (
     <svg width={W} height={H} viewBox={`0 0 ${W} ${H}`} style={{display:"block",overflow:"visible"}}>
