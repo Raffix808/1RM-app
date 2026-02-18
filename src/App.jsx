@@ -184,7 +184,6 @@ const LIFT_ICON_SRCS = {
 };
 
 // ── Hexagon Badge ─────────────────────────────────────────
-// Pointy-top hexagon, matches the uploaded Nike-style design
 // Icon in upper 55%, two text lines in lower 35%
 function HexBadge({topLine, bottomLine, iconKey, size=100, locked=false}){
   // pointy-top hex: first vertex at top (90° offset from flat-top)
@@ -208,7 +207,7 @@ function HexBadge({topLine, bottomLine, iconKey, size=100, locked=false}){
   const clipId = `hx${iconKey||"x"}${size}${(topLine+bottomLine).replace(/[^a-z0-9]/gi,"")}`;
 
   // Icon occupies upper portion: centred at ~42% height, scaled to fit
-  const iconSize = size * 0.55;
+  const iconSize = size * 0.4;
   const iconX = cx - iconSize/2;
   const iconY = cy*0.18;
 
