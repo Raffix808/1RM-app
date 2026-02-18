@@ -239,7 +239,7 @@ function HexBadge({topLine, bottomLine, iconKey, size=100, locked=false}){
 
       {/* Top text line — weight/value */}
       <text
-        x={cx} y={H*0.735}
+        x={cx} y={H*0.6}
         textAnchor="middle" dominantBaseline="middle"
         fontFamily="-apple-system,'Arial Black',Arial,sans-serif"
         fontSize={W*0.145} fontWeight="900"
@@ -249,7 +249,7 @@ function HexBadge({topLine, bottomLine, iconKey, size=100, locked=false}){
 
       {/* Bottom text line — exercise name */}
       <text
-        x={cx} y={H*0.885}
+        x={cx} y={H*0.75}
         textAnchor="middle" dominantBaseline="middle"
         fontFamily="-apple-system,'Arial Black',Arial,sans-serif"
         fontSize={W*0.118} fontWeight="900"
