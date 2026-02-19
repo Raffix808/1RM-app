@@ -8,7 +8,7 @@ const DEFAULT_EXERCISES = [
   "Barbell Row","Dumbbell Press","Tricep Pushdown"
 ];
 const REP_RANGE = [1,2,3,4,5,6,7,8,9,10,11,12];
-const TABS = ["Calculator","History","Exercise","Body","Badges"];
+const TABS = ["Log","Routines","Exercise","Progress","Badges"];
 const MONTHS = ["January","February","March","April","May","June",
   "July","August","September","October","November","December"];
 const DAY_LABELS = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
@@ -33,7 +33,7 @@ const BADGE_EXERCISES = {
 function makeTiers(start, step, max, prefix, label){
   const tiers=[];
   for(let t=start;t<=max;t+=step)
-    tiers.push({id:`${prefix}_${t}`,label:`${t}kg`,desc:`${t}kg ${label}`,threshold:t,type:"1rm"});
+    tiers.push({id:`${prefix}_${t}`,label:`${t}`,desc:`${t}kg ${label}`,threshold:t,type:"1rm"});
   return tiers; // low→high
 }
 
@@ -156,11 +156,12 @@ const IconDumbbell=(
     <line x1="7" y1="12" x2="17" y2="12" strokeWidth={2.5}/>
   </svg>
 );
-const IconBody=(
-  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} width={22} height={22}>
-    <circle cx="12" cy="4" r="2"/>
-    <path d="M12 6v5M9 8l-3 4h3l-1 6h8l-1-6h3l-3-4"/>
-  </svg>
+const IconBody=(active)=>(
+  <img src={BODY_ICON_SRC} width={26} height={26}
+    style={{display:"block",filter:active
+      ? "brightness(0) saturate(100%) invert(20%) sepia(90%) saturate(3000%) hue-rotate(340deg) brightness(85%)"
+      : "brightness(0) invert(1) opacity(0.35)"
+    }} alt="body"/>
 );
 const IconBadges=(
   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} width={22} height={22}>
@@ -174,7 +175,7 @@ const IconSettings=(
     <path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83 0 2 2 0 010-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 010-2.83 2 2 0 012.83 0l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 0 2 2 0 010 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"/>
   </svg>
 );
-const TAB_ICONS={Calculator:IconCalc,History:IconHistory,Exercise:IconDumbbell,Body:IconBody,Badges:IconBadges};
+const TAB_ICONS={Log:IconCalc,Routines:IconHistory,Exercise:IconDumbbell,Body:null,Badges:IconBadges};
 
 const LIFT_ICON_SRCS = {
   bench: "data:image/png;base64,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",
@@ -183,22 +184,25 @@ const LIFT_ICON_SRCS = {
   squat: "data:image/png;base64,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",
 };
 
+const BODY_ICON_SRC = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABwAAAAcCAYAAAByDd+UAAAD10lEQVR42qWWTaiVVRSGn33u8fpXQj8DyRykRmYSQWZp/iRoTS4UTgrCQeHEpgbNC8IGzjItg4gcGBJWkv2KBSppQUYIJVcis9BSQ7uo3XvOeZq83+3zcO/1hBs2+/v2Wvtde6/9rrU2dDW1qI0x5hsZl6h/qr+qC+uybv2x5ruV+mrfA+pu9XP1gcxNVg/7X9uvNiNbpO5TP1QHxsIEaNQFpZS2OkvdBewBbgMK8HgWzgfuB9rpy4H5MfpEoGYCe9Rd6uxgjhqtdtcspbTUpcAO4A5gA3A2ACWbuwnoA1q19bdE9gfwPnA6c1uBRerTpZRDlY3RI6ur1aG4anvmpqqr1Bn5fyny4XTVFyO7MbrT8v9G5EPq6qvcG2MX1Y7aVherk2pEqcZ1MdRKH1bXdek0snZx8Az26srYdPV4jQhHxyOUOkU9VdM9lbm+cdYcrekeV6c3gJXAnUAHuAC8HYauiEtnqv2llHYp5QpwoIZ5oJRyJcToj+4UdWWY+lYwO7HxCOqmuKejfqoequ1qi3pGHVTXqg+r52su/UtdFtlgdLfU1h8MZif6r6AeqymcydiOwrmMVXu9Kw4Pq9tq/61saCQYqqdr8mON0P9IaH0O+BIYCf0bwHC6wLrQvpN+OnPW9KpwGQnW+WAfATaUKp0BLwAbgZ3Az8BDwFfAAuC5BHq1gUkBHgH6Y7wvsXcsvPg68fwUsLmUsqliUjP5c456oHb8YfV59dmam9tdLm7XuuozWTPcdY9zYqM5esJSijnpemAVcCiZ5XZgbbJHGS8N5zreA36PG5cC+4E3K+xSiqVeJUopdsXR9hidC9wXF06KC6tc3MqdfQecAC6UUtZ3V6AKezR5V7uIiycnmD8G7gJ2hyCNnOZgiFC1k8An0d2bJNFfXVf9IFfVq1KKpZQWMFxKaccl0xK874QYBfgNuFRj5A7gIjAV2J+1I6WUVrfXrlkb1a2J1QH1VfUndam6MTnyI3W9+oO6bawa2KvBRlw8N8AfqAvU19TH1AeTVVaoe1MV5o33YriqHo7VSimdFOUT6ru5u3uAR+Pa5cBQ3N4BdpZSBqtCPh5uo4eTFmAfMBu4HLKcDXFGwtJZwGfRnbA1r2Uv7P0FOA4sBpbESF9i7W7ge+BkdL0eg1W7nPfMZuBl4G/gVuALYDDvmaFegHo12AJuBuYAAzF0LzAjWeWGWjKYsDV6JW1ea03g29znJeCbYCzo1WCzhw11crICPAksq8k7ybkC84AfJ8i3/+uECzMuAv6pvUuvZK7ExVyvwU6CeE3++2q1EGBK5gDWRHdC1/4Lcn8DVBd1bvEAAAAASUVORK5CYII=";
+
 // ── Hexagon Badge ─────────────────────────────────────────
-// Icon in upper 55%, two text lines in lower 35%
-function HexBadge({topLine, bottomLine, iconKey, size=100, locked=false}){
-  // pointy-top hex: first vertex at top (90° offset from flat-top)
-  const W=size, H=size*1.12; // slightly taller than wide for pointy-top look
-  const cx=W/2, cy=H/2;
-  const rx=W*0.46, ry=H*0.47; // slight vertical stretch
+// Regular pointy-top hexagon. All content fits inside inner border ring.
+function HexBadge({topLine, bottomLine, iconKey, size=130, locked=false}){
+  const W = size;
+  const H = size * (2 / Math.sqrt(3));  // exact regular hex ratio
+  const cx = W / 2, cy = H / 2;
+  const r  = W / 2 * 0.90;  // outer hex radius (slightly inset so stroke doesn't clip)
+  const ri = r * 0.82;       // inner border ring radius
 
   const hexPts = Array.from({length:6},(_,i)=>{
-    const a = (Math.PI/180)*(60*i - 90); // -90 = pointy top
-    return `${cx+rx*Math.cos(a)},${cy+ry*Math.sin(a)}`;
+    const a = (Math.PI/180)*(60*i - 90);
+    return `${cx + r*Math.cos(a)},${cy + r*Math.sin(a)}`;
   }).join(" ");
 
   const innerPts = Array.from({length:6},(_,i)=>{
     const a = (Math.PI/180)*(60*i - 90);
-    return `${cx+rx*0.83*Math.cos(a)},${cy+ry*0.83*Math.sin(a)}`;
+    return `${cx + ri*Math.cos(a)},${cy + ri*Math.sin(a)}`;
   }).join(" ");
 
   const fill   = locked ? "#252525" : C.crimson;
@@ -206,26 +210,28 @@ function HexBadge({topLine, bottomLine, iconKey, size=100, locked=false}){
   const tFill  = locked ? "#484848" : C.white;
   const clipId = `hx${iconKey||"x"}${size}${(topLine+bottomLine).replace(/[^a-z0-9]/gi,"")}`;
 
-  // Icon occupies upper portion: centred at ~42% height, scaled to fit
-  const iconSize = size * 0.4;
-  const iconX = cx - iconSize/2;
-  const iconY = cy*0.4;
+  // Icon: 28% of size wide, sits in the upper portion centred horizontally
+  const iconSize = size * 0.28;
+  const iconX = cx - iconSize / 2;
+  const iconY = H * 0.22;  // icon pushed lower into hex
+
+  // Text moved up to give icon room
+  const topTextY  = H * 0.595;
+  const botTextY  = H * 0.72;   // exercise name — moved up
 
   return (
     <svg width={W} height={H} viewBox={`0 0 ${W} ${H}`} style={{display:"block",overflow:"visible"}}>
       <defs>
         <clipPath id={clipId}><polygon points={hexPts}/></clipPath>
       </defs>
-
-      {/* Fill */}
+      {/* Hex fill */}
       <polygon points={hexPts} fill={fill}/>
       {/* Outer border */}
-      <polygon points={hexPts} fill="none" stroke={stroke} strokeWidth={W*0.042}/>
-      {/* Inner border */}
-      <polygon points={innerPts} fill="none" stroke={stroke} strokeWidth={W*0.02}
-        strokeOpacity={locked ? 0.25 : 0.55}/>
-
-      {/* Icon — real PNG embedded as base64 */}
+      <polygon points={hexPts} fill="none" stroke={stroke} strokeWidth={W*0.038}/>
+      {/* Inner border ring */}
+      <polygon points={innerPts} fill="none" stroke={stroke} strokeWidth={W*0.018}
+        strokeOpacity={locked ? 0.25 : 0.6}/>
+      {/* Icon clipped inside hex */}
       {iconKey && LIFT_ICON_SRCS[iconKey] && (
         <image
           href={LIFT_ICON_SRCS[iconKey]}
@@ -236,29 +242,28 @@ function HexBadge({topLine, bottomLine, iconKey, size=100, locked=false}){
           preserveAspectRatio="xMidYMid meet"
         />
       )}
-
-      {/* Top text line — weight/value */}
+      {/* Number / weight */}
       <text
-        x={cx} y={H*0.62}
+        x={cx} y={topTextY}
         textAnchor="middle" dominantBaseline="middle"
         fontFamily="-apple-system,'Arial Black',Arial,sans-serif"
-        fontSize={W*0.145} fontWeight="900"
+        fontSize={W*0.135} fontWeight="900"
         fill={tFill}>
         {topLine}
       </text>
-
-      {/* Bottom text line — exercise name */}
+      {/* Exercise name */}
       <text
-        x={cx} y={H*0.72}
+        x={cx} y={botTextY}
         textAnchor="middle" dominantBaseline="middle"
         fontFamily="-apple-system,'Arial Black',Arial,sans-serif"
-        fontSize={W*0.118} fontWeight="900"
+        fontSize={W*0.105} fontWeight="900"
         fill={tFill} opacity={locked ? 0.45 : 1}>
         {bottomLine}
       </text>
     </svg>
   );
 }
+
 
 // ── PR Popup Badge ────────────────────────────────────────
 function PRBadge({pr, onClose}){
@@ -328,7 +333,7 @@ function PRBadge({pr, onClose}){
         display:"flex",flexDirection:"column",alignItems:"center"}}>
         <div style={{filter:"drop-shadow(0 8px 40px rgba(196,30,30,0.7))"}}>
           <HexBadge
-            topLine={`${pr.weight}kg × ${pr.reps}`}
+            topLine={`${pr.weight} × ${pr.reps}`}
             bottomLine={shortName}
             iconKey={iconKey}
             size={200}
@@ -513,9 +518,46 @@ function CalendarView({workoutDates,selectedDateKey,onSelectDate,highlightOnly=f
   );
 }
 
+// ── Helper: add exercise picker inside routine builder ────
+function AddExerciseToDay({exercises, onAdd}){
+  const [open,setOpen] = useState(false);
+  const [search,setSearch] = useState("");
+  const filtered = exercises.filter(e=>e.toLowerCase().includes(search.toLowerCase()));
+  if(!open) return(
+    <button onClick={()=>setOpen(true)}
+      style={{width:"100%",padding:"13px",borderRadius:10,border:"1px dashed #444",
+        background:"transparent",color:"#888",fontSize:14,cursor:"pointer",textAlign:"center"}}>
+      + Add Exercise
+    </button>
+  );
+  return(
+    <div style={{background:"#1a1a1a",borderRadius:10,border:"1px solid #333",overflow:"hidden"}}>
+      <input autoFocus placeholder="Search exercises..."
+        value={search} onChange={e=>setSearch(e.target.value)}
+        style={{width:"100%",padding:"12px 14px",background:"transparent",border:"none",
+          borderBottom:"1px solid #333",color:"#fff",fontSize:14,outline:"none",boxSizing:"border-box"}}/>
+      <div style={{maxHeight:200,overflowY:"auto"}}>
+        {filtered.map(ex=>(
+          <div key={ex} onClick={()=>{onAdd(ex);setOpen(false);setSearch("");}}
+            style={{padding:"12px 14px",cursor:"pointer",fontSize:14,color:"#fff",
+              borderBottom:"1px solid #222"}}>
+            {ex}
+          </div>
+        ))}
+        {filtered.length===0&&<div style={{padding:"12px 14px",color:"#666",fontSize:13}}>No matches</div>}
+      </div>
+      <button onClick={()=>{setOpen(false);setSearch("");}}
+        style={{width:"100%",padding:"10px",background:"transparent",border:"none",
+          borderTop:"1px solid #333",color:"#888",cursor:"pointer",fontSize:13}}>
+        Cancel
+      </button>
+    </div>
+  );
+}
+
 // ══════════════════════════════════════════════════════════
 export default function App(){
-  const [tab,setTab]=useState("Calculator");
+  const [tab,setTab]=useState("Log");
   const [showSettings,setShowSettings]=useState(false);
   const [selectedDateKey,setSelectedDateKey]=useState(todayKey());
   const [showCalPicker,setShowCalPicker]=useState(false);
@@ -560,6 +602,25 @@ export default function App(){
 
   // Badges page
   const [badgeDetail,setBadgeDetail]=useState(null); // {exercise, type:"pr"|"tonnage"}
+  // Progress tab — selected exercise for chart drill-down
+  const [progSelEx,setProgSelEx]=useState(null);
+  // Routines
+  const [routines,setRoutines]=useState(()=>lsGet("routines",[]));
+  const [activeRoutine,setActiveRoutine]=useState(()=>lsGet("activeRoutine",null));
+  const [showAddRoutine,setShowAddRoutine]=useState(false);
+  const [newRoutineName,setNewRoutineName]=useState("");
+  const [newRoutineDays,setNewRoutineDays]=useState(3);
+  const [newRoutineExercises,setNewRoutineExercises]=useState({});// {dayIdx: [{exercise,sets}]}
+  const [buildStep,setBuildStep]=useState("name"); // name|days|exercises
+  const [buildDay,setBuildDay]=useState(0);
+  const [showRoutineDrop,setShowRoutineDrop]=useState(false);
+  // Log-tab routine selection
+  const [logRoutine,setLogRoutine]=useState(null);
+  const [logDay,setLogDay]=useState(0);
+  const [logExIdx,setLogExIdx]=useState(0);
+  const [showLogRoutineDrop,setShowLogRoutineDrop]=useState(false);
+  const [showLogDayDrop,setShowLogDayDrop]=useState(false);
+
 
   useEffect(()=>{lsSet("workouts2",workouts);},[workouts]);
   useEffect(()=>{lsSet("unit",unit);},[unit]);
@@ -569,6 +630,9 @@ export default function App(){
   useEffect(()=>{lsSet("bfGender",bfGender);},[bfGender]);
   useEffect(()=>{lsSet("bfHeight",bfHeight);},[bfHeight]);
   useEffect(()=>{lsSet("achievementsOn",achievementsOn);},[achievementsOn]);
+  useEffect(()=>{lsSet("routines",routines);},[routines]);
+  useEffect(()=>{lsSet("activeRoutine",activeRoutine);},[activeRoutine]);
+
 
   const weightNum=parseFloat(weight),repsNum=parseInt(reps);
   const oneRM=weightNum>0&&repsNum>0?calc1RM(weightNum,repsNum):0;
@@ -602,6 +666,22 @@ export default function App(){
     setWeight("");setReps("");
     if(isPR){setTimeout(()=>setPrBadge({exercise,weight:weightNum,reps:repsNum,unit}),300);}
     else showToast(`✓ Set ${setNum} saved!`);
+
+    // Auto-advance: if using a routine, check if all sets for this exercise are done
+    if(logRoutine && logRoutine.days && logRoutine.days[logDay]){
+      const dayExercises = logRoutine.days[logDay]; // [{exercise,sets}]
+      const currentEx = dayExercises[logExIdx];
+      if(currentEx){
+        const setsTarget = currentEx.sets;
+        const newSetNum = setNum; // setNum was computed at top of saveSet
+        if(newSetNum >= setsTarget && logExIdx < dayExercises.length - 1){
+          const nextIdx = logExIdx + 1;
+          setLogExIdx(nextIdx);
+          setExercise(dayExercises[nextIdx].exercise);
+          setTimeout(()=>showToast(`✓ Moving to: ${dayExercises[nextIdx].exercise}`),400);
+        }
+      }
+    }
   };
 
   const deleteWorkout=(id)=>setWorkouts(prev=>prev.filter(w=>w.id!==id));
@@ -652,6 +732,217 @@ export default function App(){
   const secLabel={fontSize:11,color:C.muted,textTransform:"uppercase",letterSpacing:2,
     marginBottom:12,fontWeight:700,marginTop:4};
 
+
+  // ── ROUTINES ──────────────────────────────────────────────
+  const renderRoutines=()=>{
+    // ---- Day history drill-down (tapped a workout day on calendar) ----
+    if(calWorkoutDay){
+      const dw=workouts.filter(w=>w.dateKey===calWorkoutDay);
+      return(
+        <div>
+          <div style={{padding:"20px 20px 12px",display:"flex",alignItems:"center",gap:12,borderBottom:`1px solid ${C.border}`}}>
+            <button onClick={()=>setCalWorkoutDay(null)} style={{background:"none",border:"none",color:C.text,fontSize:22,cursor:"pointer",padding:0}}>←</button>
+            <div>
+              <div style={{fontSize:20,fontWeight:700,color:C.text}}>{calWorkoutDay}</div>
+              <div style={{fontSize:12,color:C.muted}}>Workout summary</div>
+            </div>
+          </div>
+          {dw.length===0
+            ?<div style={{textAlign:"center",color:C.dim,padding:40,fontSize:15}}>No workouts logged this day</div>
+            :dw.map(w=><WorkoutCard key={w.id} w={w} onTap={goToExercise} onDelete={deleteWorkout}/>)
+          }
+        </div>
+      );
+    }
+
+    // ---- Add Routine modal ----
+    if(showAddRoutine){
+      if(buildStep==="name") return(
+        <div style={{padding:"20px 16px"}}>
+          <div style={{display:"flex",alignItems:"center",gap:12,marginBottom:24}}>
+            <button onClick={()=>setShowAddRoutine(false)} style={{background:"none",border:"none",color:C.text,fontSize:22,cursor:"pointer"}}>←</button>
+            <span style={{fontSize:20,fontWeight:700,color:C.text}}>New Routine</span>
+          </div>
+          <div style={{color:C.muted,fontSize:11,marginBottom:6,textTransform:"uppercase",letterSpacing:1}}>Routine Name</div>
+          <input style={{...inp,marginBottom:16}} placeholder="e.g. Push Pull Legs"
+            value={newRoutineName} onChange={e=>setNewRoutineName(e.target.value)}/>
+          <div style={{color:C.muted,fontSize:11,marginBottom:6,textTransform:"uppercase",letterSpacing:1}}>How many days?</div>
+          <div style={{display:"flex",gap:8,marginBottom:24,flexWrap:"wrap"}}>
+            {[2,3,4,5,6,7].map(d=>(
+              <button key={d} onClick={()=>setNewRoutineDays(d)}
+                style={{flex:1,minWidth:44,padding:"14px 0",borderRadius:10,border:`1px solid ${d===newRoutineDays?C.crimson:C.borderW}`,
+                  background:d===newRoutineDays?C.crimson:"transparent",color:C.white,fontSize:16,fontWeight:700,cursor:"pointer"}}>
+                {d}
+              </button>
+            ))}
+          </div>
+          <button style={btnP} onClick={()=>{
+            if(!newRoutineName.trim())return;
+            setNewRoutineExercises({});
+            setBuildDay(0);
+            setBuildStep("exercises");
+          }}>Next →</button>
+        </div>
+      );
+
+      if(buildStep==="exercises"){
+        const dayExs = newRoutineExercises[buildDay]||[];
+        return(
+          <div style={{padding:"20px 16px"}}>
+            <div style={{display:"flex",alignItems:"center",gap:12,marginBottom:8}}>
+              <button onClick={()=>setBuildStep("name")} style={{background:"none",border:"none",color:C.text,fontSize:22,cursor:"pointer"}}>←</button>
+              <span style={{fontSize:20,fontWeight:700,color:C.text}}>{newRoutineName}</span>
+            </div>
+            {/* Day tabs */}
+            <div style={{display:"flex",gap:6,marginBottom:20,overflowX:"auto",paddingBottom:4}}>
+              {Array.from({length:newRoutineDays},(_,i)=>(
+                <button key={i} onClick={()=>setBuildDay(i)}
+                  style={{flexShrink:0,padding:"8px 16px",borderRadius:20,border:`1px solid ${i===buildDay?C.crimson:C.borderW}`,
+                    background:i===buildDay?C.crimson:"transparent",color:C.white,fontSize:14,fontWeight:600,cursor:"pointer"}}>
+                  Day {i+1}
+                </button>
+              ))}
+            </div>
+
+            <div style={{color:C.muted,fontSize:11,marginBottom:8,textTransform:"uppercase",letterSpacing:1}}>
+              Day {buildDay+1} Exercises
+            </div>
+
+            {/* Existing exercises for this day */}
+            {dayExs.map((ex,i)=>(
+              <div key={i} style={{background:C.surface,borderRadius:10,padding:"12px 14px",marginBottom:8,
+                display:"flex",alignItems:"center",gap:10,border:`1px solid ${C.border}`}}>
+                <div style={{flex:1}}>
+                  <div style={{fontSize:14,fontWeight:700,color:C.text}}>{ex.exercise}</div>
+                  <div style={{fontSize:12,color:C.muted}}>{ex.sets} sets</div>
+                </div>
+                <div style={{display:"flex",gap:6,alignItems:"center"}}>
+                  <button onClick={()=>{
+                    const updated={...newRoutineExercises};
+                    const arr=[...dayExs];
+                    arr[i]={...arr[i],sets:Math.max(1,arr[i].sets-1)};
+                    updated[buildDay]=arr;setNewRoutineExercises(updated);
+                  }} style={{background:C.elevated,border:"none",color:C.white,width:30,height:30,borderRadius:15,cursor:"pointer",fontSize:18}}>−</button>
+                  <span style={{fontSize:16,fontWeight:700,color:C.white,minWidth:20,textAlign:"center"}}>{ex.sets}</span>
+                  <button onClick={()=>{
+                    const updated={...newRoutineExercises};
+                    const arr=[...dayExs];
+                    arr[i]={...arr[i],sets:arr[i].sets+1};
+                    updated[buildDay]=arr;setNewRoutineExercises(updated);
+                  }} style={{background:C.elevated,border:"none",color:C.white,width:30,height:30,borderRadius:15,cursor:"pointer",fontSize:18}}>+</button>
+                  <button onClick={()=>{
+                    const updated={...newRoutineExercises};
+                    updated[buildDay]=dayExs.filter((_,j)=>j!==i);
+                    setNewRoutineExercises(updated);
+                  }} style={{background:"transparent",border:"none",color:C.dim,fontSize:18,cursor:"pointer",marginLeft:4}}>✕</button>
+                </div>
+              </div>
+            ))}
+
+            {/* Add exercise dropdown */}
+            <AddExerciseToDay
+              exercises={exercises}
+              onAdd={(ex)=>{
+                const updated={...newRoutineExercises};
+                updated[buildDay]=[...(updated[buildDay]||[]),{exercise:ex,sets:3}];
+                setNewRoutineExercises(updated);
+              }}
+            />
+
+            {/* Save or next day */}
+            <div style={{marginTop:16,display:"flex",gap:8}}>
+              {buildDay < newRoutineDays-1 ? (
+                <button style={btnP} onClick={()=>setBuildDay(buildDay+1)}>Next Day →</button>
+              ) : (
+                <button style={btnP} onClick={()=>{
+                  const days=Array.from({length:newRoutineDays},(_,i)=>newRoutineExercises[i]||[]);
+                  const routine={name:newRoutineName.trim(),days};
+                  setRoutines(prev=>[...prev,routine]);
+                  setActiveRoutine(routine.name);
+                  setShowAddRoutine(false);
+                  setBuildStep("name");
+                  setNewRoutineName("");
+                  setNewRoutineExercises({});
+                }}>Save Routine ✓</button>
+              )}
+            </div>
+          </div>
+        );
+      }
+    }
+
+    // ---- Main Routines view ----
+    const active = routines.find(r=>r.name===activeRoutine)||null;
+    return(
+      <div style={{paddingBottom:20}}>
+        {/* Calendar — tap a workout day to see that day's history */}
+        <CalendarView workoutDates={workoutDates} selectedDateKey={selectedDateKey}
+          onSelectDate={dk=>{
+            setSelectedDateKey(dk);
+            if(workoutDates.has(dk)) setCalWorkoutDay(dk);
+          }} highlightOnly={false}/>
+
+        {/* Active Routine */}
+        <div style={{padding:"16px 16px 0"}}>
+          <div style={secLabel}>Active Routine</div>
+          {/* Dropdown */}
+          <div style={{position:"relative",marginBottom:12}}>
+            <div onClick={()=>setShowRoutineDrop(v=>!v)}
+              style={{...inp,cursor:"pointer",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+              <span style={{color:active?"#000":"#888",fontSize:15}}>{active?active.name:"No routine selected"}</span>
+              <span style={{color:"#999",fontSize:12}}>▾</span>
+            </div>
+            {showRoutineDrop&&(
+              <div style={{position:"absolute",top:"calc(100% - 4px)",left:0,right:0,zIndex:200,
+                background:"#1a1a1a",borderRadius:10,maxHeight:220,overflowY:"auto",
+                border:`1px solid ${C.borderW}`,boxShadow:"0 8px 32px rgba(0,0,0,0.8)"}}>
+                {routines.length===0&&(
+                  <div style={{padding:"16px 14px",color:C.dim,fontSize:14}}>No routines yet</div>
+                )}
+                {routines.map((r,i)=>(
+                  <div key={i} onClick={()=>{setActiveRoutine(r.name);setShowRoutineDrop(false);}}
+                    style={{padding:"13px 14px",cursor:"pointer",fontSize:15,borderBottom:`1px solid ${C.border}`,
+                      color:activeRoutine===r.name?C.crimsonL:C.text,background:activeRoutine===r.name?"#2a0808":"transparent",
+                      display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+                    <span>{r.name}</span>
+                    <button onClick={(e)=>{e.stopPropagation();setRoutines(prev=>prev.filter((_,j)=>j!==i));
+                      if(activeRoutine===r.name)setActiveRoutine(null);}}
+                      style={{background:"none",border:"none",color:C.dim,fontSize:16,cursor:"pointer"}}>✕</button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Active routine preview */}
+          {active&&(
+            <div style={{background:C.surface,borderRadius:12,padding:"14px",border:`1px solid ${C.border}`}}>
+              {active.days.map((day,di)=>(
+                <div key={di} style={{marginBottom:di<active.days.length-1?12:0}}>
+                  <div style={{fontSize:12,fontWeight:700,color:C.crimsonL,marginBottom:6,textTransform:"uppercase",letterSpacing:1}}>
+                    Day {di+1}
+                  </div>
+                  {day.map((ex,ei)=>(
+                    <div key={ei} style={{display:"flex",justifyContent:"space-between",padding:"4px 0",borderBottom:`1px solid ${C.border}`}}>
+                      <span style={{fontSize:14,color:C.text}}>{ex.exercise}</span>
+                      <span style={{fontSize:13,color:C.muted}}>{ex.sets} sets</span>
+                    </div>
+                  ))}
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Add routine button */}
+          <button style={{...btnP,marginTop:16}} onClick={()=>{
+            setShowAddRoutine(true);setBuildStep("name");setNewRoutineName("");
+            setNewRoutineDays(3);setNewRoutineExercises({});setBuildDay(0);
+          }}>+ Add Routine</button>
+        </div>
+      </div>
+    );
+  };
+
   // ── CALCULATOR ────────────────────────────────────────────
   const setNum=currentSetNum();
   const renderCalculator=()=>(
@@ -664,6 +955,93 @@ export default function App(){
         </div>
         <div style={{height:1,background:`linear-gradient(90deg,transparent,${C.borderW},transparent)`,marginTop:16}}/>
       </div>
+
+      {/* Routine selector row */}
+      <div style={{display:"flex",gap:8,padding:"0 16px",marginBottom:12}}>
+        <div style={{flex:1,position:"relative"}}>
+          <div style={{color:C.muted,fontSize:11,marginBottom:5,textTransform:"uppercase",letterSpacing:1}}>Workout</div>
+          <div onClick={()=>setShowLogRoutineDrop(v=>!v)}
+            style={{...inp,cursor:"pointer",display:"flex",justifyContent:"space-between",alignItems:"center",padding:"12px 14px"}}>
+            <span style={{fontSize:14,color:logRoutine?"#000":"#999",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",maxWidth:"90%"}}>
+              {logRoutine?logRoutine.name:"None"}
+            </span>
+            <span style={{color:"#999",fontSize:12}}>▾</span>
+          </div>
+          {showLogRoutineDrop&&(
+            <div style={{position:"absolute",top:"calc(100% - 4px)",left:0,right:0,zIndex:200,
+              background:"#1a1a1a",borderRadius:10,maxHeight:200,overflowY:"auto",
+              border:`1px solid ${C.borderW}`,boxShadow:"0 8px 32px rgba(0,0,0,0.8)"}}>
+              <div onClick={()=>{setLogRoutine(null);setLogDay(0);setLogExIdx(0);setShowLogRoutineDrop(false);}}
+                style={{padding:"13px 14px",cursor:"pointer",fontSize:14,borderBottom:`1px solid ${C.border}`,color:C.muted}}>
+                None
+              </div>
+              {routines.map((r,i)=>(
+                <div key={i} onClick={()=>{
+                  setLogRoutine(r);setLogDay(0);setLogExIdx(0);
+                  if(r.days&&r.days[0]&&r.days[0][0]) setExercise(r.days[0][0].exercise);
+                  setShowLogRoutineDrop(false);
+                }} style={{padding:"13px 14px",cursor:"pointer",fontSize:14,borderBottom:`1px solid ${C.border}`,
+                  color:logRoutine&&logRoutine.name===r.name?C.crimsonL:C.text,
+                  background:logRoutine&&logRoutine.name===r.name?"#2a0808":"transparent"}}>
+                  {r.name}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+        {logRoutine&&(
+          <div style={{flex:1,position:"relative"}}>
+            <div style={{color:C.muted,fontSize:11,marginBottom:5,textTransform:"uppercase",letterSpacing:1}}>Day</div>
+            <div onClick={()=>setShowLogDayDrop(v=>!v)}
+              style={{...inp,cursor:"pointer",display:"flex",justifyContent:"space-between",alignItems:"center",padding:"12px 14px"}}>
+              <span style={{fontSize:14,color:"#000"}}>Day {logDay+1}</span>
+              <span style={{color:"#999",fontSize:12}}>▾</span>
+            </div>
+            {showLogDayDrop&&(
+              <div style={{position:"absolute",top:"calc(100% - 4px)",left:0,right:0,zIndex:200,
+                background:"#1a1a1a",borderRadius:10,maxHeight:200,overflowY:"auto",
+                border:`1px solid ${C.borderW}`,boxShadow:"0 8px 32px rgba(0,0,0,0.8)"}}>
+                {logRoutine.days.map((_,di)=>(
+                  <div key={di} onClick={()=>{
+                    setLogDay(di);setLogExIdx(0);
+                    if(logRoutine.days[di]&&logRoutine.days[di][0]) setExercise(logRoutine.days[di][0].exercise);
+                    setShowLogDayDrop(false);
+                  }} style={{padding:"13px 14px",cursor:"pointer",fontSize:14,borderBottom:`1px solid ${C.border}`,
+                    color:logDay===di?C.crimsonL:C.text,background:logDay===di?"#2a0808":"transparent"}}>
+                    Day {di+1}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+
+      {/* Exercise progress indicator for routine */}
+      {logRoutine&&logRoutine.days&&logRoutine.days[logDay]&&(
+        <div style={{margin:"0 16px 10px",background:"#1a1a1a",borderRadius:10,padding:"10px 14px",
+          border:`1px solid ${C.borderW}`,display:"flex",alignItems:"center",gap:10,flexWrap:"wrap"}}>
+          {logRoutine.days[logDay].map((ex,i)=>{
+            const done=workouts.find(w=>w.exercise===ex.exercise&&w.dateKey===selectedDateKey);
+            const doneSets=done?done.sets.length:0;
+            const complete=doneSets>=ex.sets;
+            return(
+              <div key={i} onClick={()=>{setLogExIdx(i);setExercise(ex.exercise);}}
+                style={{display:"flex",alignItems:"center",gap:5,cursor:"pointer",
+                  padding:"4px 10px",borderRadius:20,
+                  background:i===logExIdx?C.crimson:complete?"#1a3a1a":"transparent",
+                  border:`1px solid ${i===logExIdx?C.crimson:complete?"#2d5a2d":C.border}`}}>
+                <span style={{fontSize:12,fontWeight:700,color:complete?"#4ade80":i===logExIdx?C.white:C.muted}}>
+                  {ex.exercise.split(" ").map(w=>w[0]).join("").substring(0,4).toUpperCase()}
+                </span>
+                <span style={{fontSize:10,color:complete?"#4ade80":i===logExIdx?C.white:C.dim}}>
+                  {doneSets}/{ex.sets}
+                </span>
+              </div>
+            );
+          })}
+        </div>
+      )}
 
       <div style={{display:"flex",gap:8,padding:"0 16px",marginBottom:10}}>
         <div style={{flex:2}}>
@@ -928,8 +1306,8 @@ export default function App(){
     );
   };
 
-  // ── BODY ──────────────────────────────────────────────────
-  const renderBody=()=>(
+  // ── BODY (removed — replaced by renderProgress below) ────
+  // const renderBody=()=>(
     <div style={{padding:16}}>
       <div style={secLabel}>Body Weight</div>
       <div style={{background:C.surface,borderRadius:14,padding:16,marginBottom:24,border:`1px solid ${C.border}`}}>
@@ -1064,12 +1442,12 @@ export default function App(){
             {REP_RANGE.map(r=>{
               const rec=recs[r];
               return(
-                <div key={r} style={{display:"flex",flexDirection:"column",alignItems:"center",width:100}}>
+                <div key={r} style={{display:"flex",flexDirection:"column",alignItems:"center",width:120}}>
                   <HexBadge
-                    topLine={rec?`${rec.weight}kg`:"—"}
+                    topLine={rec?`${rec.weight}`:"—"}
                     bottomLine={`${r}RM`}
                     iconKey={exMeta.icon}
-                    size={92}
+                    size={115}
                     locked={!rec}
                   />
                   <div style={{marginTop:6,textAlign:"center"}}>
@@ -1107,12 +1485,12 @@ export default function App(){
             {[...defs].reverse().map(b=>{
               const isU=unlockedIds.has(b.id);
               return(
-                <div key={b.id} style={{display:"flex",flexDirection:"column",alignItems:"center",width:100}}>
+                <div key={b.id} style={{display:"flex",flexDirection:"column",alignItems:"center",width:120}}>
                   <HexBadge
                     topLine={b.label}
                     bottomLine={exMeta.short}
                     iconKey={exMeta.icon}
-                    size={92}
+                    size={115}
                     locked={!isU}
                   />
                   <div style={{marginTop:6,textAlign:"center"}}>
@@ -1147,12 +1525,12 @@ export default function App(){
                 const best=recs[1]?.weight||getBest1RM(workouts,ex);
                 return(
                   <div key={ex} onClick={()=>setBadgeDetail({exercise:ex,type:"pr"})}
-                    style={{display:"flex",flexDirection:"column",alignItems:"center",width:100,cursor:"pointer"}}>
+                    style={{display:"flex",flexDirection:"column",alignItems:"center",width:120,cursor:"pointer"}}>
                     <HexBadge
-                      topLine={best?`${best}kg`:"PR"}
+                      topLine={best?`${best}`:"PR"}
                       bottomLine={exMeta.short}
                       iconKey={exMeta.icon}
-                      size={92}
+                      size={115}
                     />
                     <div style={{marginTop:6,textAlign:"center"}}>
                       <div style={{fontSize:11,fontWeight:700,color:C.text,lineHeight:1.3}}>{ex}</div>
@@ -1178,20 +1556,20 @@ export default function App(){
               const next=getNextTonnageBadge(workouts,ex);
               return(
                 <div key={ex} onClick={()=>setBadgeDetail({exercise:ex,type:"tonnage"})}
-                  style={{display:"flex",flexDirection:"column",alignItems:"center",width:100,cursor:"pointer"}}>
+                  style={{display:"flex",flexDirection:"column",alignItems:"center",width:120,cursor:"pointer"}}>
                   <HexBadge
                     topLine={best?best.label:(defs.length?defs[0].label:"—")}
                     bottomLine={meta.short}
                     iconKey={meta.icon}
-                    size={92}
+                    size={115}
                     locked={!best}
                   />
                   <div style={{marginTop:6,textAlign:"center"}}>
                     <div style={{fontSize:11,fontWeight:700,color:best?C.text:C.dim,lineHeight:1.3}}>{ex}</div>
                     <div style={{fontSize:10,color:best?C.muted:C.dim,marginTop:1}}>
                       {best
-                        ?(next?`Next: ${next.label}`:`Max unlocked!`)
-                        :`Goal: ${defs.length?defs[0].label:"—"}`}
+                        ?(next?`Next: ${next.label}kg`:`Max unlocked!`)
+                        :`Goal: ${defs.length?defs[0].label+"kg":"—"}`}
                     </div>
                   </div>
                 </div>
@@ -1276,10 +1654,10 @@ export default function App(){
       )}
 
       <div style={{flex:1,overflowY:"auto",paddingBottom:90}}>
-        {tab==="Calculator"&&renderCalculator()}
-        {tab==="History"&&renderHistory()}
+        {tab==="Log"&&renderCalculator()}
+        {tab==="Routines"&&renderRoutines()}
         {tab==="Exercise"&&renderExercise()}
-        {tab==="Body"&&renderBody()}
+        {tab==="Progress"&&renderProgress()}
         {tab==="Badges"&&renderBadges()}
       </div>
 
@@ -1290,8 +1668,8 @@ export default function App(){
         {TABS.map(t=>(
           <div key={t} style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",gap:3,
             cursor:"pointer",color:tab===t?C.crimson:C.dim,fontSize:9,fontWeight:tab===t?700:400}}
-            onClick={()=>{setTab(t);if(t!=="History")setCalWorkoutDay(null);if(t!=="Exercise")setSelEx(null);setBadgeDetail(null);}}>
-            {TAB_ICONS[t]}<span>{t}</span>
+            onClick={()=>{setTab(t);if(t!=="Routines")setCalWorkoutDay(null);if(t!=="Exercise"&&t!=="Progress")setSelEx(null);setBadgeDetail(null);setProgSelEx(null);}}>
+            {t==="Progress" ? IconBody(tab===t) : TAB_ICONS[t]}<span>{t}</span>
           </div>
         ))}
       </div>
@@ -1344,4 +1722,264 @@ export default function App(){
       )}
     </div>
   );
-}
+}  // ── PROGRESS ──────────────────────────────────────────────
+  const renderProgress=()=>{
+    // Drill-down: exercise chart (re-uses renderExerciseDetail machinery)
+    if(progSelEx){
+      // temporarily set selEx so renderExerciseDetail works
+      const savedSelEx = selEx;
+      // We render inline with back button
+      const pWorkouts = [...workouts.filter(w=>w.exercise===progSelEx)].sort((a,b)=>a.dateKey.localeCompare(b.dateKey));
+      const ul = pWorkouts[0]?.unit||unit;
+      const latest = pWorkouts[pWorkouts.length-1];
+      const recs = getRepRecords(pWorkouts);
+      return(
+        <div>
+          <div style={{padding:"20px 20px 0",display:"flex",alignItems:"center",gap:12}}>
+            <button onClick={()=>setProgSelEx(null)} style={{background:"none",border:"none",color:C.text,fontSize:22,cursor:"pointer",padding:0}}>←</button>
+            <span style={{fontSize:20,fontWeight:700,color:C.text}}>{progSelEx}</span>
+          </div>
+          <div style={{display:"flex",padding:"10px 16px 0"}}>
+            {["Chart","History"].map(t=>(
+              <button key={t} onClick={()=>setExDetailTab(t)} style={{
+                flex:1,background:"none",border:"none",
+                borderBottom:`2px solid ${exDetailTab===t?C.crimson:"transparent"}`,
+                color:exDetailTab===t?C.white:C.dim,
+                padding:"10px 0",fontSize:16,cursor:"pointer",fontWeight:exDetailTab===t?700:400}}>
+                {t}
+              </button>
+            ))}
+          </div>
+          {exDetailTab==="Chart"?(
+            <div style={{paddingTop:14}}>
+              <div style={{display:"flex",gap:8,padding:"0 16px",marginBottom:12}}>
+                {[["1rm","Est. 1RM",C.crimson],["volume","Volume",C.green]].map(([key,label,col])=>(
+                  <button key={key} onClick={()=>setChartMetric(key)} style={{
+                    flex:1,background:chartMetric===key?col+"22":C.surface,
+                    border:`1.5px solid ${chartMetric===key?col:C.border}`,
+                    borderRadius:8,padding:"9px 0",color:chartMetric===key?col:C.muted,
+                    fontSize:13,fontWeight:chartMetric===key?700:400,cursor:"pointer"}}>
+                    {label}
+                  </button>
+                ))}
+              </div>
+              <div style={{padding:"0 16px 4px"}}>
+                {chartMetric==="1rm"
+                  ?<><div style={{fontSize:12,color:C.muted,marginBottom:8}}>Best estimated 1RM per session</div>
+                     <LineChart data={pWorkouts} valueKey="best1RM" unitLabel={ul} color={C.crimson}/></>
+                  :<><div style={{fontSize:12,color:C.muted,marginBottom:8}}>Total volume per session</div>
+                     <BarChart data={pWorkouts} valueKey="volume" color={C.green}
+                       formatVal={v=>v>=1000?`${(v/1000).toFixed(1)}k`:String(v)} unitLabel={ul}/></>
+                }
+              </div>
+              <div style={{padding:"20px 16px 4px"}}>
+                <div style={{fontSize:17,fontWeight:700,color:C.text}}>Rep Max Records</div>
+                <div style={{fontSize:12,color:C.muted,marginTop:3}}>Heaviest weight ever lifted at each rep count</div>
+              </div>
+              {REP_RANGE.map(r=>{
+                const record=recs[r];
+                const allForRep=pWorkouts.flatMap(w=>w.sets.filter(s=>s.reps===r));
+                const latestForRep=latest?.sets.find(s=>s.reps===r);
+                const isNewPR=record&&latestForRep&&latestForRep.weight===record.weight&&allForRep.length>=2;
+                return(
+                  <div key={r} style={{...divRow,background:isNewPR?C.elevated:"transparent"}}>
+                    <span style={{fontSize:15,flex:1,fontWeight:500,color:C.text}}>{r} Rep Max</span>
+                    <span style={{fontSize:17,flex:1.5,textAlign:"center",fontWeight:record?800:400,color:C.text}}>
+                      {record?`${record.weight} `:<span style={{color:C.dim}}>—</span>}
+                      {record&&<span style={{fontSize:12,color:C.muted,fontWeight:400}}>{record.unit}</span>}
+                    </span>
+                    <span style={{fontSize:12,flex:1,textAlign:"right"}}>
+                      {isNewPR?<span style={{color:C.crimsonL,fontWeight:700}}>★ PR</span>
+                        :record?<span style={{color:C.dim}}>{record.date}</span>:null}
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+          ):(
+            <div style={{paddingTop:8}}>
+              {pWorkouts.length===0
+                ?<div style={{textAlign:"center",color:C.dim,padding:40}}>No entries yet</div>
+                :[...pWorkouts].reverse().map(w=>(
+                  <div key={w.id} style={{padding:"14px 16px",borderBottom:`1px solid ${C.border}`}}>
+                    <div style={{color:C.dim,fontSize:12,marginBottom:6}}>{w.dateKey}</div>
+                    <div style={{fontSize:13,color:C.muted,marginBottom:8}}>
+                      Best 1RM: <span style={{color:C.text,fontWeight:700,fontSize:15}}>{w.best1RM} {w.unit}</span>
+                      <span style={{marginLeft:16}}>Vol: <span style={{color:C.green,fontWeight:700}}>{w.volume} {w.unit}</span></span>
+                    </div>
+                    {w.sets.map((s,i)=>(
+                      <div key={i} style={{display:"flex",gap:8,fontSize:13,color:C.muted,marginBottom:3,alignItems:"center"}}>
+                        <span style={{color:C.dim,fontSize:11,width:40}}>Set {s.setNum}</span>
+                        <span style={{color:C.text,fontWeight:600}}>{s.weight}{w.unit}</span>
+                        <span>× {s.reps} reps</span>
+                        <span style={{marginLeft:"auto",color:C.white,fontSize:12,fontWeight:600,opacity:0.6}}>{s.weight*s.reps}{w.unit}</span>
+                      </div>
+                    ))}
+                  </div>
+                ))
+              }
+            </div>
+          )}
+        </div>
+      );
+    }
+
+    // ── Main Progress view ──
+    const trackedExs = exercises.filter(ex=>workouts.some(w=>w.exercise===ex));
+    return(
+      <div style={{paddingBottom:30}}>
+
+        {/* ── Body Weight ── */}
+        <div style={{padding:"16px 16px 0"}}>
+          <div style={secLabel}>Body Weight</div>
+          <div style={{background:C.surface,borderRadius:14,padding:16,marginBottom:20,border:`1px solid ${C.border}`}}>
+            <div style={{display:"flex",gap:10,marginBottom:14,alignItems:"flex-end"}}>
+              <div style={{flex:1}}>
+                <div style={{color:C.muted,fontSize:12,marginBottom:5}}>Weight (kg)</div>
+                <div style={{position:"relative"}}>
+                  <input style={{...inp,paddingRight:38}} inputMode="decimal" placeholder="0.0"
+                    value={bwInput} onChange={e=>setBwInput(e.target.value)}/>
+                  <span style={{position:"absolute",right:12,top:"50%",transform:"translateY(-50%)",color:"#666",fontSize:13,pointerEvents:"none"}}>kg</span>
+                </div>
+              </div>
+              <button onClick={saveBW} style={{...btnGold,width:"auto",padding:"14px 18px",flexShrink:0}}>Save</button>
+            </div>
+            {bwHistory.length>0&&(()=>{
+              const lat=bwHistory[bwHistory.length-1];
+              const p2=bwHistory.length>1?bwHistory[bwHistory.length-2]:null;
+              const diff=p2?((lat.bodyweight-p2.bodyweight).toFixed(1)):null;
+              const col=diff&&parseFloat(diff)<0?C.green:diff&&parseFloat(diff)>0?"#f87171":C.muted;
+              return(
+                <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",
+                  marginBottom:14,background:C.elevated,borderRadius:10,padding:"10px 14px",border:`1px solid ${C.border}`}}>
+                  <div>
+                    <div style={{fontSize:11,color:C.muted}}>Latest</div>
+                    <div style={{fontSize:26,fontWeight:800,letterSpacing:-1,color:C.text}}>
+                      {lat.bodyweight}<span style={{fontSize:13,color:C.muted,fontWeight:400}}> kg</span>
+                    </div>
+                  </div>
+                  {diff&&<div style={{textAlign:"right"}}>
+                    <div style={{fontSize:11,color:C.muted}}>{lat.dateKey}</div>
+                    <div style={{fontSize:14,color:col,fontWeight:700}}>{parseFloat(diff)>0?"+":""}{diff} kg</div>
+                  </div>}
+                </div>
+              );
+            })()}
+            <LineChart data={bwHistory} valueKey="bodyweight" unitLabel="kg" color={C.green}/>
+            {bwHistory.length>0&&(
+              <div style={{marginTop:12}}>
+                {[...bwHistory].reverse().slice(0,5).map(e=>(
+                  <div key={e.id} style={{display:"flex",justifyContent:"space-between",alignItems:"center",
+                    padding:"8px 0",borderBottom:`1px solid ${C.border}`}}>
+                    <span style={{fontSize:15,fontWeight:600,color:C.text}}>{e.bodyweight} kg</span>
+                    <div style={{display:"flex",alignItems:"center",gap:12}}>
+                      <span style={{fontSize:12,color:C.dim}}>{e.dateKey}</span>
+                      <span onClick={()=>setBwHistory(prev=>prev.filter(x=>x.id!==e.id))} style={{color:"#e55",fontSize:18,cursor:"pointer"}}>×</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* ── Body Fat ── */}
+          <div style={secLabel}>Body Fat — US Navy Method</div>
+          <div style={{background:C.surface,borderRadius:14,padding:16,marginBottom:24,border:`1px solid ${C.border}`}}>
+            <div style={{fontSize:13,color:C.muted,marginBottom:14,lineHeight:1.5}}>All measurements in <b style={{color:C.text}}>centimetres</b>.</div>
+            <div style={{display:"flex",gap:8,marginBottom:12}}>
+              {["male","female"].map(g=>(
+                <button key={g} onClick={()=>setBfGender(g)} style={{
+                  flex:1,background:bfGender===g?C.crimson:C.elevated,border:`1px solid ${bfGender===g?C.crimson:C.border}`,
+                  borderRadius:8,padding:"10px 0",color:C.white,fontSize:14,fontWeight:bfGender===g?700:400,cursor:"pointer",textTransform:"capitalize"}}>
+                  {g}
+                </button>
+              ))}
+            </div>
+            <div style={{display:"flex",gap:8,marginBottom:10}}>
+              <div style={{flex:1}}>
+                <div style={{color:C.muted,fontSize:12,marginBottom:5}}>Height (cm)</div>
+                <input style={inp} inputMode="decimal" placeholder="175" value={bfHeight} onChange={e=>setBfHeight(e.target.value)}/>
+              </div>
+              <div style={{flex:1}}>
+                <div style={{color:C.muted,fontSize:12,marginBottom:5}}>Neck (cm)</div>
+                <input style={inp} inputMode="decimal" placeholder="38" value={bfNeck} onChange={e=>setBfNeck(e.target.value)}/>
+              </div>
+            </div>
+            <div style={{display:"flex",gap:8,marginBottom:14}}>
+              <div style={{flex:1}}>
+                <div style={{color:C.muted,fontSize:12,marginBottom:5}}>Waist (cm)</div>
+                <input style={inp} inputMode="decimal" placeholder="85" value={bfWaist} onChange={e=>setBfWaist(e.target.value)}/>
+              </div>
+              {bfGender==="female"&&<div style={{flex:1}}>
+                <div style={{color:C.muted,fontSize:12,marginBottom:5}}>Hips (cm)</div>
+                <input style={inp} inputMode="decimal" placeholder="95" value={bfHips} onChange={e=>setBfHips(e.target.value)}/>
+              </div>}
+            </div>
+            {bfRounded&&bfRounded>0?(
+              <div style={{background:C.elevated,borderRadius:12,padding:16,marginBottom:14,textAlign:"center",border:`1px solid ${C.border}`}}>
+                <div style={{fontSize:13,color:C.muted,marginBottom:4}}>Estimated Body Fat</div>
+                <div style={{fontSize:50,fontWeight:800,letterSpacing:-2,color:bfCat?.color||C.text}}>
+                  {bfRounded}<span style={{fontSize:22,fontWeight:400,color:C.muted}}>%</span>
+                </div>
+                <div style={{display:"inline-block",background:bfCat?.color+"22",border:`1px solid ${bfCat?.color}`,
+                  borderRadius:20,padding:"4px 14px",fontSize:13,fontWeight:600,color:bfCat?.color,marginTop:4}}>
+                  {bfCat?.label}
+                </div>
+              </div>
+            ):(
+              <div style={{background:C.elevated,borderRadius:12,padding:14,marginBottom:14,textAlign:"center",color:C.dim,fontSize:14}}>
+                Fill in all measurements to see your result
+              </div>
+            )}
+            <button onClick={saveBF} style={{...btnP,opacity:bfRounded&&bfRounded>0?1:0.4}}>Save Body Fat Reading</button>
+            {bfHistory.length>0&&(
+              <div style={{marginTop:16}}>
+                <div style={{fontSize:12,color:C.muted,marginBottom:8}}>Body fat % over time</div>
+                <LineChart data={bfHistory} valueKey="bodyfat" unitLabel="%" color={C.gold}/>
+              </div>
+            )}
+          </div>
+
+          {/* ── Tracked Exercises ── */}
+          <div style={secLabel}>Exercise Progress</div>
+          {trackedExs.length===0?(
+            <div style={{background:C.surface,borderRadius:14,padding:24,textAlign:"center",
+              color:C.dim,fontSize:14,border:`1px solid ${C.border}`}}>
+              Start logging sets to track your exercise progress here
+            </div>
+          ):(
+            <div style={{background:C.surface,borderRadius:14,border:`1px solid ${C.border}`,overflow:"hidden",marginBottom:8}}>
+              {trackedExs.map((ex,i)=>{
+                const exWkts=[...workouts.filter(w=>w.exercise===ex)].sort((a,b)=>a.dateKey.localeCompare(b.dateKey));
+                const best=exWkts.length?Math.max(...exWkts.map(w=>w.best1RM)):0;
+                const latest=exWkts[exWkts.length-1];
+                const prev=exWkts.length>1?exWkts[exWkts.length-2]:null;
+                const trend=prev?latest.best1RM-prev.best1RM:null;
+                return(
+                  <div key={ex} onClick={()=>{setProgSelEx(ex);setExDetailTab("Chart");setChartMetric("1rm");}}
+                    style={{display:"flex",justifyContent:"space-between",alignItems:"center",
+                      padding:"14px 16px",borderBottom:i<trackedExs.length-1?`1px solid ${C.border}`:"none",
+                      cursor:"pointer"}}>
+                    <div>
+                      <div style={{fontSize:15,fontWeight:600,color:C.text}}>{ex}</div>
+                      <div style={{fontSize:12,color:C.muted,marginTop:2}}>{exWkts.length} session{exWkts.length!==1?"s":""}</div>
+                    </div>
+                    <div style={{display:"flex",alignItems:"center",gap:12}}>
+                      <div style={{textAlign:"right"}}>
+                        <div style={{fontSize:16,fontWeight:800,color:C.text}}>{best}<span style={{fontSize:11,color:C.muted,fontWeight:400}}> {unit}</span></div>
+                        {trend!==null&&<div style={{fontSize:11,fontWeight:600,
+                          color:trend>0?C.green:trend<0?"#f87171":C.dim}}>
+                          {trend>0?"+":""}{trend} {unit}
+                        </div>}
+                      </div>
+                      <span style={{color:C.dim,fontSize:20}}>›</span>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  };
