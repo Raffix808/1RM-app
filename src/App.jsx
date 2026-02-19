@@ -2,10 +2,66 @@ import { useState, useEffect, useRef } from "react";
 
 // ── Constants ─────────────────────────────────────────────
 const DEFAULT_EXERCISES = [
-  "Bicep Curl Barbell","Cable Row","Incline Bench","Bench Press",
-  "Squat","Deadlift","Overhead Press","Lat Pulldown",
-  "Incline Bench Press","Leg Press","Romanian Deadlift","Pull Up",
-  "Barbell Row","Dumbbell Press","Tricep Pushdown"
+  // Original
+  "Bench Press","Squat","Deadlift","Overhead Press","Barbell Row",
+  "Incline Bench Press","Lat Pulldown","Leg Press","Romanian Deadlift",
+  "Pull Up","Dumbbell Press","Tricep Pushdown","Bicep Curl Barbell","Cable Row",
+  // Added for preset routines
+  "Power Clean","Barbell Curl","Dumbbell Curl","Tricep Extension",
+  "Face Pull","Cable Fly","Dumbbell Lateral Raise","Dumbbell Fly",
+  "Seated Cable Row","Leg Curl","Leg Extension","Hip Thrust","Good Morning",
+  "Pendlay Row","Dumbbell Row","Push Up","Dips","Chin Up",
+  "Front Squat","Sumo Deadlift","Bulgarian Split Squat"
+];
+
+// ── Preset Routines ────────────────────────────────────────
+const PRESET_ROUTINES = [
+  {
+    name:"StrongLifts 5×5",
+    days:[
+      [{exercise:"Squat",sets:5},{exercise:"Bench Press",sets:5},{exercise:"Barbell Row",sets:5}],
+      [{exercise:"Squat",sets:5},{exercise:"Overhead Press",sets:5},{exercise:"Deadlift",sets:1}],
+    ]
+  },
+  {
+    name:"Starting Strength",
+    days:[
+      [{exercise:"Squat",sets:3},{exercise:"Bench Press",sets:3},{exercise:"Deadlift",sets:1}],
+      [{exercise:"Squat",sets:3},{exercise:"Overhead Press",sets:3},{exercise:"Power Clean",sets:5}],
+    ]
+  },
+  {
+    name:"Push Pull Legs",
+    days:[
+      // Push
+      [{exercise:"Bench Press",sets:4},{exercise:"Overhead Press",sets:3},{exercise:"Incline Bench Press",sets:3},{exercise:"Dumbbell Lateral Raise",sets:3},{exercise:"Tricep Pushdown",sets:3}],
+      // Pull
+      [{exercise:"Deadlift",sets:3},{exercise:"Barbell Row",sets:4},{exercise:"Lat Pulldown",sets:3},{exercise:"Face Pull",sets:3},{exercise:"Barbell Curl",sets:3}],
+      // Legs
+      [{exercise:"Squat",sets:4},{exercise:"Romanian Deadlift",sets:3},{exercise:"Leg Press",sets:3},{exercise:"Leg Curl",sets:3},{exercise:"Leg Extension",sets:3}],
+    ]
+  },
+  {
+    name:"Upper Lower",
+    days:[
+      // Upper A
+      [{exercise:"Bench Press",sets:4},{exercise:"Barbell Row",sets:4},{exercise:"Overhead Press",sets:3},{exercise:"Pull Up",sets:3},{exercise:"Tricep Pushdown",sets:3},{exercise:"Barbell Curl",sets:3}],
+      // Lower A
+      [{exercise:"Squat",sets:4},{exercise:"Romanian Deadlift",sets:3},{exercise:"Leg Press",sets:3},{exercise:"Leg Curl",sets:3}],
+      // Upper B
+      [{exercise:"Incline Bench Press",sets:4},{exercise:"Seated Cable Row",sets:4},{exercise:"Dumbbell Lateral Raise",sets:3},{exercise:"Face Pull",sets:3},{exercise:"Dips",sets:3},{exercise:"Dumbbell Curl",sets:3}],
+      // Lower B
+      [{exercise:"Deadlift",sets:4},{exercise:"Bulgarian Split Squat",sets:3},{exercise:"Leg Extension",sets:3},{exercise:"Hip Thrust",sets:3}],
+    ]
+  },
+  {
+    name:"GZCLP (3 Day)",
+    days:[
+      [{exercise:"Squat",sets:5},{exercise:"Bench Press",sets:5},{exercise:"Lat Pulldown",sets:3},{exercise:"Romanian Deadlift",sets:3}],
+      [{exercise:"Deadlift",sets:5},{exercise:"Overhead Press",sets:5},{exercise:"Barbell Row",sets:3},{exercise:"Leg Press",sets:3}],
+      [{exercise:"Squat",sets:5},{exercise:"Bench Press",sets:5},{exercise:"Pull Up",sets:3},{exercise:"Dips",sets:3}],
+    ]
+  },
 ];
 const REP_RANGE = [1,2,3,4,5,6,7,8,9,10,11,12];
 const TABS = ["Log","Routines","Exercise","Progress","Badges"];
@@ -605,7 +661,14 @@ export default function App(){
   // Progress tab — selected exercise for chart drill-down
   const [progSelEx,setProgSelEx]=useState(null);
   // Routines
-  const [routines,setRoutines]=useState(()=>lsGet("routines",[]));
+  const [routines,setRoutines]=useState(()=>{
+    const saved=lsGet("routines",null);
+    if(!saved||saved.length===0) return PRESET_ROUTINES;
+    // Merge: add any presets not already present by name
+    const names=new Set(saved.map(r=>r.name));
+    const missing=PRESET_ROUTINES.filter(r=>!names.has(r.name));
+    return missing.length>0?[...missing,...saved]:saved;
+  });
   const [activeRoutine,setActiveRoutine]=useState(()=>lsGet("activeRoutine",null));
   const [showAddRoutine,setShowAddRoutine]=useState(false);
   const [newRoutineName,setNewRoutineName]=useState("");
@@ -614,6 +677,7 @@ export default function App(){
   const [buildStep,setBuildStep]=useState("name"); // name|days|exercises
   const [buildDay,setBuildDay]=useState(0);
   const [showRoutineDrop,setShowRoutineDrop]=useState(false);
+  const [editingRoutineIdx,setEditingRoutineIdx]=useState(null); // index into routines[] being edited
   // Log-tab routine selection
   const [logRoutine,setLogRoutine]=useState(null);
   const [logDay,setLogDay]=useState(0);
@@ -668,13 +732,13 @@ export default function App(){
     else showToast(`✓ Set ${setNum} saved!`);
 
     // Auto-advance: if using a routine, check if all sets for this exercise are done
-    if(logRoutine && logRoutine.days && logRoutine.days[logDay]){
-      const dayExercises = logRoutine.days[logDay]; // [{exercise,sets}]
+    const _activeR = routines.find(r=>r.name===activeRoutine)||null;
+    if(_activeR && _activeR.days && _activeR.days[logDay]){
+      const dayExercises = _activeR.days[logDay];
       const currentEx = dayExercises[logExIdx];
       if(currentEx){
         const setsTarget = currentEx.sets;
-        const newSetNum = setNum; // setNum was computed at top of saveSet
-        if(newSetNum >= setsTarget && logExIdx < dayExercises.length - 1){
+        if(setNum >= setsTarget && logExIdx < dayExercises.length - 1){
           const nextIdx = logExIdx + 1;
           setLogExIdx(nextIdx);
           setExercise(dayExercises[nextIdx].exercise);
@@ -735,7 +799,7 @@ export default function App(){
 
   // ── ROUTINES ──────────────────────────────────────────────
   const renderRoutines=()=>{
-    // ---- Day history drill-down (tapped a workout day on calendar) ----
+    // ---- Day history drill-down ----
     if(calWorkoutDay){
       const dw=workouts.filter(w=>w.dateKey===calWorkoutDay);
       return(
@@ -755,13 +819,16 @@ export default function App(){
       );
     }
 
-    // ---- Add Routine modal ----
+    // ---- Add / Edit Routine builder ----
     if(showAddRoutine){
+      const isEditing = editingRoutineIdx !== null;
+
       if(buildStep==="name") return(
         <div style={{padding:"20px 16px"}}>
           <div style={{display:"flex",alignItems:"center",gap:12,marginBottom:24}}>
-            <button onClick={()=>setShowAddRoutine(false)} style={{background:"none",border:"none",color:C.text,fontSize:22,cursor:"pointer"}}>←</button>
-            <span style={{fontSize:20,fontWeight:700,color:C.text}}>New Routine</span>
+            <button onClick={()=>{setShowAddRoutine(false);setEditingRoutineIdx(null);}}
+              style={{background:"none",border:"none",color:C.text,fontSize:22,cursor:"pointer"}}>←</button>
+            <span style={{fontSize:20,fontWeight:700,color:C.text}}>{isEditing?"Edit Routine":"New Routine"}</span>
           </div>
           <div style={{color:C.muted,fontSize:11,marginBottom:6,textTransform:"uppercase",letterSpacing:1}}>Routine Name</div>
           <input style={{...inp,marginBottom:16}} placeholder="e.g. Push Pull Legs"
@@ -770,15 +837,18 @@ export default function App(){
           <div style={{display:"flex",gap:8,marginBottom:24,flexWrap:"wrap"}}>
             {[2,3,4,5,6,7].map(d=>(
               <button key={d} onClick={()=>setNewRoutineDays(d)}
-                style={{flex:1,minWidth:44,padding:"14px 0",borderRadius:10,border:`1px solid ${d===newRoutineDays?C.crimson:C.borderW}`,
-                  background:d===newRoutineDays?C.crimson:"transparent",color:C.white,fontSize:16,fontWeight:700,cursor:"pointer"}}>
+                style={{flex:1,minWidth:44,padding:"14px 0",borderRadius:10,
+                  border:`1px solid ${d===newRoutineDays?C.crimson:C.borderW}`,
+                  background:d===newRoutineDays?C.crimson:"transparent",
+                  color:C.white,fontSize:16,fontWeight:700,cursor:"pointer"}}>
                 {d}
               </button>
             ))}
           </div>
           <button style={btnP} onClick={()=>{
             if(!newRoutineName.trim())return;
-            setNewRoutineExercises({});
+            // When editing and day count changes, preserve existing days up to new count
+            if(!isEditing) setNewRoutineExercises({});
             setBuildDay(0);
             setBuildStep("exercises");
           }}>Next →</button>
@@ -790,16 +860,21 @@ export default function App(){
         return(
           <div style={{padding:"20px 16px"}}>
             <div style={{display:"flex",alignItems:"center",gap:12,marginBottom:8}}>
-              <button onClick={()=>setBuildStep("name")} style={{background:"none",border:"none",color:C.text,fontSize:22,cursor:"pointer"}}>←</button>
+              <button onClick={()=>setBuildStep("name")}
+                style={{background:"none",border:"none",color:C.text,fontSize:22,cursor:"pointer"}}>←</button>
               <span style={{fontSize:20,fontWeight:700,color:C.text}}>{newRoutineName}</span>
+              {isEditing&&<span style={{marginLeft:"auto",fontSize:12,color:C.crimsonL,fontWeight:600}}>Editing</span>}
             </div>
+
             {/* Day tabs */}
             <div style={{display:"flex",gap:6,marginBottom:20,overflowX:"auto",paddingBottom:4}}>
               {Array.from({length:newRoutineDays},(_,i)=>(
                 <button key={i} onClick={()=>setBuildDay(i)}
-                  style={{flexShrink:0,padding:"8px 16px",borderRadius:20,border:`1px solid ${i===buildDay?C.crimson:C.borderW}`,
-                    background:i===buildDay?C.crimson:"transparent",color:C.white,fontSize:14,fontWeight:600,cursor:"pointer"}}>
-                  Day {i+1}
+                  style={{flexShrink:0,padding:"8px 16px",borderRadius:20,
+                    border:`1px solid ${i===buildDay?C.crimson:C.borderW}`,
+                    background:i===buildDay?C.crimson:"transparent",
+                    color:C.white,fontSize:14,fontWeight:600,cursor:"pointer"}}>
+                  Day {i+1} {(newRoutineExercises[i]||[]).length>0?`(${(newRoutineExercises[i]||[]).length})`:""}
                 </button>
               ))}
             </div>
@@ -808,7 +883,6 @@ export default function App(){
               Day {buildDay+1} Exercises
             </div>
 
-            {/* Existing exercises for this day */}
             {dayExs.map((ex,i)=>(
               <div key={i} style={{background:C.surface,borderRadius:10,padding:"12px 14px",marginBottom:8,
                 display:"flex",alignItems:"center",gap:10,border:`1px solid ${C.border}`}}>
@@ -818,38 +892,27 @@ export default function App(){
                 </div>
                 <div style={{display:"flex",gap:6,alignItems:"center"}}>
                   <button onClick={()=>{
-                    const updated={...newRoutineExercises};
-                    const arr=[...dayExs];
-                    arr[i]={...arr[i],sets:Math.max(1,arr[i].sets-1)};
-                    updated[buildDay]=arr;setNewRoutineExercises(updated);
+                    const u={...newRoutineExercises};const a=[...dayExs];
+                    a[i]={...a[i],sets:Math.max(1,a[i].sets-1)};u[buildDay]=a;setNewRoutineExercises(u);
                   }} style={{background:C.elevated,border:"none",color:C.white,width:30,height:30,borderRadius:15,cursor:"pointer",fontSize:18}}>−</button>
                   <span style={{fontSize:16,fontWeight:700,color:C.white,minWidth:20,textAlign:"center"}}>{ex.sets}</span>
                   <button onClick={()=>{
-                    const updated={...newRoutineExercises};
-                    const arr=[...dayExs];
-                    arr[i]={...arr[i],sets:arr[i].sets+1};
-                    updated[buildDay]=arr;setNewRoutineExercises(updated);
+                    const u={...newRoutineExercises};const a=[...dayExs];
+                    a[i]={...a[i],sets:a[i].sets+1};u[buildDay]=a;setNewRoutineExercises(u);
                   }} style={{background:C.elevated,border:"none",color:C.white,width:30,height:30,borderRadius:15,cursor:"pointer",fontSize:18}}>+</button>
                   <button onClick={()=>{
-                    const updated={...newRoutineExercises};
-                    updated[buildDay]=dayExs.filter((_,j)=>j!==i);
-                    setNewRoutineExercises(updated);
+                    const u={...newRoutineExercises};u[buildDay]=dayExs.filter((_,j)=>j!==i);setNewRoutineExercises(u);
                   }} style={{background:"transparent",border:"none",color:C.dim,fontSize:18,cursor:"pointer",marginLeft:4}}>✕</button>
                 </div>
               </div>
             ))}
 
-            {/* Add exercise dropdown */}
-            <AddExerciseToDay
-              exercises={exercises}
-              onAdd={(ex)=>{
-                const updated={...newRoutineExercises};
-                updated[buildDay]=[...(updated[buildDay]||[]),{exercise:ex,sets:3}];
-                setNewRoutineExercises(updated);
-              }}
-            />
+            <AddExerciseToDay exercises={exercises} onAdd={(ex)=>{
+              const u={...newRoutineExercises};
+              u[buildDay]=[...(u[buildDay]||[]),{exercise:ex,sets:3}];
+              setNewRoutineExercises(u);
+            }}/>
 
-            {/* Save or next day */}
             <div style={{marginTop:16,display:"flex",gap:8}}>
               {buildDay < newRoutineDays-1 ? (
                 <button style={btnP} onClick={()=>setBuildDay(buildDay+1)}>Next Day →</button>
@@ -857,13 +920,19 @@ export default function App(){
                 <button style={btnP} onClick={()=>{
                   const days=Array.from({length:newRoutineDays},(_,i)=>newRoutineExercises[i]||[]);
                   const routine={name:newRoutineName.trim(),days};
-                  setRoutines(prev=>[...prev,routine]);
-                  setActiveRoutine(routine.name);
-                  setShowAddRoutine(false);
-                  setBuildStep("name");
-                  setNewRoutineName("");
-                  setNewRoutineExercises({});
-                }}>Save Routine ✓</button>
+                  if(isEditing){
+                    // Update in place
+                    setRoutines(prev=>{const u=[...prev];u[editingRoutineIdx]=routine;return u;});
+                    // Update logRoutine if it was the one being edited
+                    if(logRoutine&&logRoutine.name===routines[editingRoutineIdx]?.name) setLogRoutine(routine);
+                    if(activeRoutine===routines[editingRoutineIdx]?.name) setActiveRoutine(routine.name);
+                  } else {
+                    setRoutines(prev=>[...prev,routine]);
+                    setActiveRoutine(routine.name);
+                  }
+                  setShowAddRoutine(false);setEditingRoutineIdx(null);
+                  setBuildStep("name");setNewRoutineName("");setNewRoutineExercises({});
+                }}>{isEditing?"Save Changes ✓":"Save Routine ✓"}</button>
               )}
             </div>
           </div>
@@ -875,16 +944,16 @@ export default function App(){
     const active = routines.find(r=>r.name===activeRoutine)||null;
     return(
       <div style={{paddingBottom:20}}>
-        {/* Calendar — tap a workout day to see that day's history */}
+        {/* Calendar */}
         <CalendarView workoutDates={workoutDates} selectedDateKey={selectedDateKey}
           onSelectDate={dk=>{
             setSelectedDateKey(dk);
             if(workoutDates.has(dk)) setCalWorkoutDay(dk);
           }} highlightOnly={false}/>
 
-        {/* Active Routine */}
         <div style={{padding:"16px 16px 0"}}>
           <div style={secLabel}>Active Routine</div>
+
           {/* Dropdown */}
           <div style={{position:"relative",marginBottom:12}}>
             <div onClick={()=>setShowRoutineDrop(v=>!v)}
@@ -894,48 +963,87 @@ export default function App(){
             </div>
             {showRoutineDrop&&(
               <div style={{position:"absolute",top:"calc(100% - 4px)",left:0,right:0,zIndex:200,
-                background:"#1a1a1a",borderRadius:10,maxHeight:220,overflowY:"auto",
+                background:"#1a1a1a",borderRadius:10,maxHeight:260,overflowY:"auto",
                 border:`1px solid ${C.borderW}`,boxShadow:"0 8px 32px rgba(0,0,0,0.8)"}}>
-                {routines.length===0&&(
-                  <div style={{padding:"16px 14px",color:C.dim,fontSize:14}}>No routines yet</div>
-                )}
                 {routines.map((r,i)=>(
                   <div key={i} onClick={()=>{setActiveRoutine(r.name);setShowRoutineDrop(false);}}
                     style={{padding:"13px 14px",cursor:"pointer",fontSize:15,borderBottom:`1px solid ${C.border}`,
-                      color:activeRoutine===r.name?C.crimsonL:C.text,background:activeRoutine===r.name?"#2a0808":"transparent",
+                      color:activeRoutine===r.name?C.crimsonL:C.text,
+                      background:activeRoutine===r.name?"#2a0808":"transparent",
                       display:"flex",justifyContent:"space-between",alignItems:"center"}}>
                     <span>{r.name}</span>
-                    <button onClick={(e)=>{e.stopPropagation();setRoutines(prev=>prev.filter((_,j)=>j!==i));
-                      if(activeRoutine===r.name)setActiveRoutine(null);}}
-                      style={{background:"none",border:"none",color:C.dim,fontSize:16,cursor:"pointer"}}>✕</button>
+                    <div style={{display:"flex",gap:8,alignItems:"center"}} onClick={e=>e.stopPropagation()}>
+                      {/* Edit button */}
+                      <button onClick={()=>{
+                        setShowRoutineDrop(false);
+                        setEditingRoutineIdx(i);
+                        setNewRoutineName(r.name);
+                        setNewRoutineDays(r.days.length);
+                        const exMap={};r.days.forEach((d,di)=>{exMap[di]=[...d];});
+                        setNewRoutineExercises(exMap);
+                        setBuildDay(0);setBuildStep("exercises");
+                        setShowAddRoutine(true);
+                      }} style={{background:"#1e3a5f",border:"none",color:"#60a5fa",
+                        padding:"4px 10px",borderRadius:6,fontSize:12,cursor:"pointer",fontWeight:600}}>
+                        Edit
+                      </button>
+                      {/* Delete button */}
+                      <button onClick={()=>{
+                        setRoutines(prev=>prev.filter((_,j)=>j!==i));
+                        if(activeRoutine===r.name)setActiveRoutine(null);
+                      }} style={{background:"none",border:"none",color:C.dim,fontSize:16,cursor:"pointer",padding:"4px 6px"}}>✕</button>
+                    </div>
                   </div>
                 ))}
               </div>
             )}
           </div>
 
-          {/* Active routine preview */}
-          {active&&(
-            <div style={{background:C.surface,borderRadius:12,padding:"14px",border:`1px solid ${C.border}`}}>
-              {active.days.map((day,di)=>(
-                <div key={di} style={{marginBottom:di<active.days.length-1?12:0}}>
-                  <div style={{fontSize:12,fontWeight:700,color:C.crimsonL,marginBottom:6,textTransform:"uppercase",letterSpacing:1}}>
-                    Day {di+1}
-                  </div>
-                  {day.map((ex,ei)=>(
-                    <div key={ei} style={{display:"flex",justifyContent:"space-between",padding:"4px 0",borderBottom:`1px solid ${C.border}`}}>
-                      <span style={{fontSize:14,color:C.text}}>{ex.exercise}</span>
-                      <span style={{fontSize:13,color:C.muted}}>{ex.sets} sets</span>
+          {/* Active routine preview with Edit button */}
+          {active&&(()=>{
+            const activeIdx=routines.findIndex(r=>r.name===activeRoutine);
+            return(
+              <div style={{background:C.surface,borderRadius:12,border:`1px solid ${C.border}`,overflow:"hidden"}}>
+                {/* Header row */}
+                <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",
+                  padding:"12px 14px",borderBottom:`1px solid ${C.border}`}}>
+                  <span style={{fontSize:15,fontWeight:700,color:C.text}}>{active.name}</span>
+                  <button onClick={()=>{
+                    setEditingRoutineIdx(activeIdx);
+                    setNewRoutineName(active.name);
+                    setNewRoutineDays(active.days.length);
+                    const exMap={};active.days.forEach((d,di)=>{exMap[di]=[...d];});
+                    setNewRoutineExercises(exMap);
+                    setBuildDay(0);setBuildStep("exercises");
+                    setShowAddRoutine(true);
+                  }} style={{background:"#1e3a5f",border:"none",color:"#60a5fa",
+                    padding:"6px 14px",borderRadius:8,fontSize:13,cursor:"pointer",fontWeight:600}}>
+                    ✏ Edit
+                  </button>
+                </div>
+                {/* Days */}
+                <div style={{padding:"12px 14px"}}>
+                  {active.days.map((day,di)=>(
+                    <div key={di} style={{marginBottom:di<active.days.length-1?14:0}}>
+                      <div style={{fontSize:11,fontWeight:700,color:C.crimsonL,marginBottom:6,
+                        textTransform:"uppercase",letterSpacing:1}}>Day {di+1}</div>
+                      {day.map((ex,ei)=>(
+                        <div key={ei} style={{display:"flex",justifyContent:"space-between",
+                          padding:"5px 0",borderBottom:`1px solid ${C.border}`}}>
+                          <span style={{fontSize:14,color:C.text}}>{ex.exercise}</span>
+                          <span style={{fontSize:13,color:C.muted}}>{ex.sets} sets</span>
+                        </div>
+                      ))}
                     </div>
                   ))}
                 </div>
-              ))}
-            </div>
-          )}
+              </div>
+            );
+          })()}
 
-          {/* Add routine button */}
           <button style={{...btnP,marginTop:16}} onClick={()=>{
-            setShowAddRoutine(true);setBuildStep("name");setNewRoutineName("");
+            setShowAddRoutine(true);setEditingRoutineIdx(null);
+            setBuildStep("name");setNewRoutineName("");
             setNewRoutineDays(3);setNewRoutineExercises({});setBuildDay(0);
           }}>+ Add Routine</button>
         </div>
@@ -956,92 +1064,84 @@ export default function App(){
         <div style={{height:1,background:`linear-gradient(90deg,transparent,${C.borderW},transparent)`,marginTop:16}}/>
       </div>
 
-      {/* Routine selector row */}
-      <div style={{display:"flex",gap:8,padding:"0 16px",marginBottom:12}}>
-        <div style={{flex:1,position:"relative"}}>
-          <div style={{color:C.muted,fontSize:11,marginBottom:5,textTransform:"uppercase",letterSpacing:1}}>Workout</div>
-          <div onClick={()=>setShowLogRoutineDrop(v=>!v)}
-            style={{...inp,cursor:"pointer",display:"flex",justifyContent:"space-between",alignItems:"center",padding:"12px 14px"}}>
-            <span style={{fontSize:14,color:logRoutine?"#000":"#999",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",maxWidth:"90%"}}>
-              {logRoutine?logRoutine.name:"None"}
-            </span>
-            <span style={{color:"#999",fontSize:12}}>▾</span>
+      {/* Active routine — derived from activeRoutine, Day selector only */}
+      {(()=>{
+        const activeR=routines.find(r=>r.name===activeRoutine)||null;
+        if(!activeR) return(
+          <div style={{margin:"0 16px 12px",background:C.surface,borderRadius:10,padding:"12px 14px",
+            border:`1px solid ${C.border}`}}>
+            <span style={{fontSize:13,color:C.dim}}>No active routine — set one in the Routines tab</span>
           </div>
-          {showLogRoutineDrop&&(
-            <div style={{position:"absolute",top:"calc(100% - 4px)",left:0,right:0,zIndex:200,
-              background:"#1a1a1a",borderRadius:10,maxHeight:200,overflowY:"auto",
-              border:`1px solid ${C.borderW}`,boxShadow:"0 8px 32px rgba(0,0,0,0.8)"}}>
-              <div onClick={()=>{setLogRoutine(null);setLogDay(0);setLogExIdx(0);setShowLogRoutineDrop(false);}}
-                style={{padding:"13px 14px",cursor:"pointer",fontSize:14,borderBottom:`1px solid ${C.border}`,color:C.muted}}>
-                None
-              </div>
-              {routines.map((r,i)=>(
-                <div key={i} onClick={()=>{
-                  setLogRoutine(r);setLogDay(0);setLogExIdx(0);
-                  if(r.days&&r.days[0]&&r.days[0][0]) setExercise(r.days[0][0].exercise);
-                  setShowLogRoutineDrop(false);
-                }} style={{padding:"13px 14px",cursor:"pointer",fontSize:14,borderBottom:`1px solid ${C.border}`,
-                  color:logRoutine&&logRoutine.name===r.name?C.crimsonL:C.text,
-                  background:logRoutine&&logRoutine.name===r.name?"#2a0808":"transparent"}}>
-                  {r.name}
+        );
+        return(
+          <div style={{padding:"0 16px",marginBottom:12}}>
+            <div style={{display:"flex",gap:8}}>
+              {/* Routine name — read only */}
+              <div style={{flex:1}}>
+                <div style={{color:C.muted,fontSize:11,marginBottom:5,textTransform:"uppercase",letterSpacing:1}}>Workout</div>
+                <div style={{...inp,background:"#e8e8e8",color:"#555",cursor:"default",padding:"12px 14px",fontSize:14,fontWeight:600}}>
+                  {activeR.name}
                 </div>
-              ))}
-            </div>
-          )}
-        </div>
-        {logRoutine&&(
-          <div style={{flex:1,position:"relative"}}>
-            <div style={{color:C.muted,fontSize:11,marginBottom:5,textTransform:"uppercase",letterSpacing:1}}>Day</div>
-            <div onClick={()=>setShowLogDayDrop(v=>!v)}
-              style={{...inp,cursor:"pointer",display:"flex",justifyContent:"space-between",alignItems:"center",padding:"12px 14px"}}>
-              <span style={{fontSize:14,color:"#000"}}>Day {logDay+1}</span>
-              <span style={{color:"#999",fontSize:12}}>▾</span>
-            </div>
-            {showLogDayDrop&&(
-              <div style={{position:"absolute",top:"calc(100% - 4px)",left:0,right:0,zIndex:200,
-                background:"#1a1a1a",borderRadius:10,maxHeight:200,overflowY:"auto",
-                border:`1px solid ${C.borderW}`,boxShadow:"0 8px 32px rgba(0,0,0,0.8)"}}>
-                {logRoutine.days.map((_,di)=>(
-                  <div key={di} onClick={()=>{
-                    setLogDay(di);setLogExIdx(0);
-                    if(logRoutine.days[di]&&logRoutine.days[di][0]) setExercise(logRoutine.days[di][0].exercise);
-                    setShowLogDayDrop(false);
-                  }} style={{padding:"13px 14px",cursor:"pointer",fontSize:14,borderBottom:`1px solid ${C.border}`,
-                    color:logDay===di?C.crimsonL:C.text,background:logDay===di?"#2a0808":"transparent"}}>
-                    Day {di+1}
+              </div>
+              {/* Day dropdown */}
+              <div style={{flex:1,position:"relative"}}>
+                <div style={{color:C.muted,fontSize:11,marginBottom:5,textTransform:"uppercase",letterSpacing:1}}>Day</div>
+                <div onClick={()=>setShowLogDayDrop(v=>!v)}
+                  style={{...inp,cursor:"pointer",display:"flex",justifyContent:"space-between",alignItems:"center",padding:"12px 14px"}}>
+                  <span style={{fontSize:14,color:"#000",fontWeight:600}}>Day {logDay+1}</span>
+                  <span style={{color:"#999",fontSize:12}}>▾</span>
+                </div>
+                {showLogDayDrop&&(
+                  <div style={{position:"absolute",top:"calc(100% - 4px)",left:0,right:0,zIndex:200,
+                    background:"#1a1a1a",borderRadius:10,maxHeight:200,overflowY:"auto",
+                    border:`1px solid ${C.borderW}`,boxShadow:"0 8px 32px rgba(0,0,0,0.8)"}}>
+                    {activeR.days.map((_,di)=>(
+                      <div key={di} onClick={()=>{
+                        setLogDay(di);setLogExIdx(0);
+                        if(activeR.days[di]&&activeR.days[di][0]) setExercise(activeR.days[di][0].exercise);
+                        setShowLogDayDrop(false);
+                      }} style={{padding:"13px 14px",cursor:"pointer",fontSize:14,borderBottom:`1px solid ${C.border}`,
+                        color:logDay===di?C.crimsonL:C.text,background:logDay===di?"#2a0808":"transparent"}}>
+                        Day {di+1}
+                      </div>
+                    ))}
                   </div>
-                ))}
+                )}
               </div>
-            )}
+            </div>
           </div>
-        )}
-      </div>
+        );
+      })()}
 
-      {/* Exercise progress indicator for routine */}
-      {logRoutine&&logRoutine.days&&logRoutine.days[logDay]&&(
-        <div style={{margin:"0 16px 10px",background:"#1a1a1a",borderRadius:10,padding:"10px 14px",
-          border:`1px solid ${C.borderW}`,display:"flex",alignItems:"center",gap:10,flexWrap:"wrap"}}>
-          {logRoutine.days[logDay].map((ex,i)=>{
-            const done=workouts.find(w=>w.exercise===ex.exercise&&w.dateKey===selectedDateKey);
-            const doneSets=done?done.sets.length:0;
-            const complete=doneSets>=ex.sets;
-            return(
-              <div key={i} onClick={()=>{setLogExIdx(i);setExercise(ex.exercise);}}
-                style={{display:"flex",alignItems:"center",gap:5,cursor:"pointer",
-                  padding:"4px 10px",borderRadius:20,
-                  background:i===logExIdx?C.crimson:complete?"#1a3a1a":"transparent",
-                  border:`1px solid ${i===logExIdx?C.crimson:complete?"#2d5a2d":C.border}`}}>
-                <span style={{fontSize:12,fontWeight:700,color:complete?"#4ade80":i===logExIdx?C.white:C.muted}}>
-                  {ex.exercise.split(" ").map(w=>w[0]).join("").substring(0,4).toUpperCase()}
-                </span>
-                <span style={{fontSize:10,color:complete?"#4ade80":i===logExIdx?C.white:C.dim}}>
-                  {doneSets}/{ex.sets}
-                </span>
-              </div>
-            );
-          })}
-        </div>
-      )}
+      {/* Exercise progress strip — uses activeRoutine */}
+      {(()=>{
+        const activeR=routines.find(r=>r.name===activeRoutine)||null;
+        return activeR&&activeR.days&&activeR.days[logDay]&&(
+          <div style={{margin:"0 16px 10px",background:"#1a1a1a",borderRadius:10,padding:"10px 14px",
+            border:`1px solid ${C.borderW}`,display:"flex",alignItems:"center",gap:10,flexWrap:"wrap"}}>
+            {activeR.days[logDay].map((ex,i)=>{
+              const done=workouts.find(w=>w.exercise===ex.exercise&&w.dateKey===selectedDateKey);
+              const doneSets=done?done.sets.length:0;
+              const complete=doneSets>=ex.sets;
+              return(
+                <div key={i} onClick={()=>{setLogExIdx(i);setExercise(ex.exercise);}}
+                  style={{display:"flex",alignItems:"center",gap:5,cursor:"pointer",
+                    padding:"4px 10px",borderRadius:20,
+                    background:i===logExIdx?C.crimson:complete?"#1a3a1a":"transparent",
+                    border:`1px solid ${i===logExIdx?C.crimson:complete?"#2d5a2d":C.border}`}}>
+                  <span style={{fontSize:12,fontWeight:700,color:complete?"#4ade80":i===logExIdx?C.white:C.muted}}>
+                    {ex.exercise.split(" ").map(w=>w[0]).join("").substring(0,4).toUpperCase()}
+                  </span>
+                  <span style={{fontSize:10,color:complete?"#4ade80":i===logExIdx?C.white:C.dim}}>
+                    {doneSets}/{ex.sets}
+                  </span>
+                </div>
+              );
+            })}
+          </div>
+        );
+      })()}
+}
 
       <div style={{display:"flex",gap:8,padding:"0 16px",marginBottom:10}}>
         <div style={{flex:2}}>
@@ -1306,118 +1406,6 @@ export default function App(){
     );
   };
 
-  // ── BODY (removed — replaced by renderProgress below) ────
-  // const renderBody=()=>(
-    <div style={{padding:16}}>
-      <div style={secLabel}>Body Weight</div>
-      <div style={{background:C.surface,borderRadius:14,padding:16,marginBottom:24,border:`1px solid ${C.border}`}}>
-        <div style={{display:"flex",gap:10,marginBottom:14,alignItems:"flex-end"}}>
-          <div style={{flex:1}}>
-            <div style={{color:C.muted,fontSize:12,marginBottom:5}}>Weight (kg)</div>
-            <div style={{position:"relative"}}>
-              <input style={{...inp,paddingRight:38}} inputMode="decimal" placeholder="0.0"
-                value={bwInput} onChange={e=>setBwInput(e.target.value)}/>
-              <span style={{position:"absolute",right:12,top:"50%",transform:"translateY(-50%)",color:"#666",fontSize:13,pointerEvents:"none"}}>kg</span>
-            </div>
-          </div>
-          <button onClick={saveBW} style={{...btnGold,width:"auto",padding:"14px 18px",flexShrink:0}}>Save</button>
-        </div>
-        {bwHistory.length>0&&(()=>{
-          const lat=bwHistory[bwHistory.length-1];
-          const p2=bwHistory.length>1?bwHistory[bwHistory.length-2]:null;
-          const diff=p2?((lat.bodyweight-p2.bodyweight).toFixed(1)):null;
-          const col=diff&&parseFloat(diff)<0?C.green:diff&&parseFloat(diff)>0?"#f87171":C.muted;
-          return(
-            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",
-              marginBottom:14,background:C.elevated,borderRadius:10,padding:"10px 14px",border:`1px solid ${C.border}`}}>
-              <div>
-                <div style={{fontSize:11,color:C.muted}}>Latest</div>
-                <div style={{fontSize:26,fontWeight:800,letterSpacing:-1,color:C.text}}>
-                  {lat.bodyweight}<span style={{fontSize:13,color:C.muted,fontWeight:400}}> kg</span>
-                </div>
-              </div>
-              {diff&&<div style={{textAlign:"right"}}>
-                <div style={{fontSize:11,color:C.muted}}>{lat.dateKey}</div>
-                <div style={{fontSize:14,color:col,fontWeight:700}}>{parseFloat(diff)>0?"+":""}{diff} kg</div>
-              </div>}
-            </div>
-          );
-        })()}
-        <LineChart data={bwHistory} valueKey="bodyweight" unitLabel="kg" color={C.green}/>
-        {bwHistory.length>0&&(
-          <div style={{marginTop:12}}>
-            {[...bwHistory].reverse().slice(0,5).map(e=>(
-              <div key={e.id} style={{display:"flex",justifyContent:"space-between",alignItems:"center",
-                padding:"8px 0",borderBottom:`1px solid ${C.border}`}}>
-                <span style={{fontSize:15,fontWeight:600,color:C.text}}>{e.bodyweight} kg</span>
-                <div style={{display:"flex",alignItems:"center",gap:12}}>
-                  <span style={{fontSize:12,color:C.dim}}>{e.dateKey}</span>
-                  <span onClick={()=>setBwHistory(prev=>prev.filter(x=>x.id!==e.id))} style={{color:"#e55",fontSize:18,cursor:"pointer"}}>×</span>
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
-
-      <div style={secLabel}>Body Fat — US Navy Method</div>
-      <div style={{background:C.surface,borderRadius:14,padding:16,marginBottom:24,border:`1px solid ${C.border}`}}>
-        <div style={{fontSize:13,color:C.muted,marginBottom:14,lineHeight:1.5}}>All measurements in <b style={{color:C.text}}>centimetres</b>.</div>
-        <div style={{display:"flex",gap:8,marginBottom:12}}>
-          {["male","female"].map(g=>(
-            <button key={g} onClick={()=>setBfGender(g)} style={{
-              flex:1,background:bfGender===g?C.crimson:C.elevated,border:`1px solid ${bfGender===g?C.crimson:C.border}`,
-              borderRadius:8,padding:"10px 0",color:C.white,fontSize:14,fontWeight:bfGender===g?700:400,cursor:"pointer",textTransform:"capitalize"}}>
-              {g}
-            </button>
-          ))}
-        </div>
-        <div style={{display:"flex",gap:8,marginBottom:10}}>
-          <div style={{flex:1}}>
-            <div style={{color:C.muted,fontSize:12,marginBottom:5}}>Height (cm)</div>
-            <input style={inp} inputMode="decimal" placeholder="175" value={bfHeight} onChange={e=>setBfHeight(e.target.value)}/>
-          </div>
-          <div style={{flex:1}}>
-            <div style={{color:C.muted,fontSize:12,marginBottom:5}}>Neck (cm)</div>
-            <input style={inp} inputMode="decimal" placeholder="38" value={bfNeck} onChange={e=>setBfNeck(e.target.value)}/>
-          </div>
-        </div>
-        <div style={{display:"flex",gap:8,marginBottom:14}}>
-          <div style={{flex:1}}>
-            <div style={{color:C.muted,fontSize:12,marginBottom:5}}>Waist (cm)</div>
-            <input style={inp} inputMode="decimal" placeholder="85" value={bfWaist} onChange={e=>setBfWaist(e.target.value)}/>
-          </div>
-          {bfGender==="female"&&<div style={{flex:1}}>
-            <div style={{color:C.muted,fontSize:12,marginBottom:5}}>Hips (cm)</div>
-            <input style={inp} inputMode="decimal" placeholder="95" value={bfHips} onChange={e=>setBfHips(e.target.value)}/>
-          </div>}
-        </div>
-        {bfRounded&&bfRounded>0?(
-          <div style={{background:C.elevated,borderRadius:12,padding:16,marginBottom:14,textAlign:"center",border:`1px solid ${C.border}`}}>
-            <div style={{fontSize:13,color:C.muted,marginBottom:4}}>Estimated Body Fat</div>
-            <div style={{fontSize:50,fontWeight:800,letterSpacing:-2,color:bfCat?.color||C.text}}>
-              {bfRounded}<span style={{fontSize:22,fontWeight:400,color:C.muted}}>%</span>
-            </div>
-            <div style={{display:"inline-block",background:bfCat?.color+"22",border:`1px solid ${bfCat?.color}`,
-              borderRadius:20,padding:"4px 14px",fontSize:13,fontWeight:600,color:bfCat?.color,marginTop:4}}>
-              {bfCat?.label}
-            </div>
-          </div>
-        ):(
-          <div style={{background:C.elevated,borderRadius:12,padding:14,marginBottom:14,textAlign:"center",color:C.dim,fontSize:14}}>
-            Fill in all measurements to see your result
-          </div>
-        )}
-        <button onClick={saveBF} style={{...btnP,opacity:bfRounded&&bfRounded>0?1:0.4}}>Save Body Fat Reading</button>
-        {bfHistory.length>0&&(
-          <div style={{marginTop:16}}>
-            <div style={{fontSize:12,color:C.muted,marginBottom:8}}>Body fat % over time</div>
-            <LineChart data={bfHistory} valueKey="bodyfat" unitLabel="%" color={C.gold}/>
-          </div>
-        )}
-      </div>
-    </div>
-  );
 
   // ── BADGES ────────────────────────────────────────────────
   // Get all exercises that have at least 2 entries (real PRs possible)
