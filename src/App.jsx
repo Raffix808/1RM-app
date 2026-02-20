@@ -810,6 +810,7 @@ export default function App(){
   const [buildDay,setBuildDay]=useState(0);
   const [showRoutineDrop,setShowRoutineDrop]=useState(false);
   const [editingRoutineIdx,setEditingRoutineIdx]=useState(null); // index into routines[] being edited
+  const [selectedRoutine,setSelectedRoutine]=useState(null); // highlighted in dropdown (not yet active)
   // Log-tab routine selection
   const [logRoutine,setLogRoutine]=useState(null);
   const [logDay,setLogDay]=useState(0);
@@ -1077,10 +1078,10 @@ export default function App(){
     return(
       <div style={{paddingBottom:20}}>
         {/* Calendar */}
-        <CalendarView workoutDates={workoutDates} selectedDateKey={selectedDateKey}
+        <CalendarView workoutDates={workoutDates} selectedDateKey={calWorkoutDay||selectedDateKey}
           onSelectDate={dk=>{
-            setSelectedDateKey(dk);
             if(workoutDates.has(dk)) setCalWorkoutDay(dk);
+            // Do NOT update selectedDateKey here — that controls the Log tab
           }} highlightOnly={false}/>
 
         <div style={{padding:"16px 16px 0"}}>
@@ -1090,7 +1091,9 @@ export default function App(){
           <div style={{position:"relative",marginBottom:12}}>
             <div onClick={()=>setShowRoutineDrop(v=>!v)}
               style={{...inp,cursor:"pointer",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-              <span style={{color:active?"#000":"#888",fontSize:15}}>{active?active.name:"No routine selected"}</span>
+              <span style={{color:"#000",fontSize:15}}>
+                {(selectedRoutine||active)?(selectedRoutine||active).name:"No routine selected"}
+              </span>
               <span style={{color:"#999",fontSize:12}}>▾</span>
             </div>
             {showRoutineDrop&&(
@@ -1098,10 +1101,10 @@ export default function App(){
                 background:"#1a1a1a",borderRadius:10,maxHeight:260,overflowY:"auto",
                 border:`1px solid ${C.borderW}`,boxShadow:"0 8px 32px rgba(0,0,0,0.8)"}}>
                 {routines.map((r,i)=>(
-                  <div key={i} onClick={()=>{setActiveRoutine(r.name);setShowRoutineDrop(false);}}
+                  <div key={i} onClick={()=>{setSelectedRoutine(r);setShowRoutineDrop(false);}}
                     style={{padding:"13px 14px",cursor:"pointer",fontSize:15,borderBottom:`1px solid ${C.border}`,
-                      color:activeRoutine===r.name?C.crimsonL:C.text,
-                      background:activeRoutine===r.name?"#2a0808":"transparent",
+                      color:(selectedRoutine||active)?.name===r.name?C.crimsonL:C.text,
+                      background:(selectedRoutine||active)?.name===r.name?"#2a0808":"transparent",
                       display:"flex",justifyContent:"space-between",alignItems:"center"}}>
                     <span>{r.name}</span>
                     <div style={{display:"flex",gap:8,alignItems:"center"}} onClick={e=>e.stopPropagation()}>
@@ -1131,22 +1134,43 @@ export default function App(){
             )}
           </div>
 
-          {/* Active routine preview with Edit button */}
-          <ActiveRoutinePreview
-            active={active}
-            routines={routines}
-            activeRoutine={activeRoutine}
-            C={C}
-            onEdit={(r, idx)=>{
-              setEditingRoutineIdx(idx);
-              setNewRoutineName(r.name);
-              setNewRoutineDays(r.days.length);
-              const exMap={};r.days.forEach((d,di)=>{exMap[di]=[...d];});
-              setNewRoutineExercises(exMap);
-              setBuildDay(0);setBuildStep("exercises");
-              setShowAddRoutine(true);
-            }}
-          />
+          {/* Routine preview — shows selected or active */}
+          {(()=>{
+            const preview = selectedRoutine || active;
+            const previewIdx = preview ? routines.findIndex(r=>r.name===preview.name) : -1;
+            const isSelectedDifferentFromActive = selectedRoutine && selectedRoutine.name !== activeRoutine;
+            return preview ? (
+              <>
+                <ActiveRoutinePreview
+                  active={preview}
+                  routines={routines}
+                  activeRoutine={activeRoutine}
+                  C={C}
+                  onEdit={(r, idx)=>{
+                    setEditingRoutineIdx(idx);
+                    setNewRoutineName(r.name);
+                    setNewRoutineDays(r.days.length);
+                    const exMap={};r.days.forEach((d,di)=>{exMap[di]=[...d];});
+                    setNewRoutineExercises(exMap);
+                    setBuildDay(0);setBuildStep("exercises");
+                    setShowAddRoutine(true);
+                  }}
+                />
+                {isSelectedDifferentFromActive && (
+                  <button style={{...btnP,marginTop:12,background:C.crimson}} onClick={()=>{
+                    setActiveRoutine(selectedRoutine.name);
+                    setSelectedRoutine(null);
+                  }}>★ Make Active Routine</button>
+                )}
+                {!isSelectedDifferentFromActive && (
+                  <div style={{marginTop:10,padding:"8px 12px",borderRadius:8,background:"#1a2a1a",
+                    border:"1px solid #2d5a2d",textAlign:"center"}}>
+                    <span style={{fontSize:12,color:"#4ade80",fontWeight:600}}>✓ Active Routine</span>
+                  </div>
+                )}
+              </>
+            ) : null;
+          })()}
 
           <button style={{...btnP,marginTop:16}} onClick={()=>{
             setShowAddRoutine(true);setEditingRoutineIdx(null);
